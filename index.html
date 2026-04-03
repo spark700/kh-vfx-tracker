@@ -461,8 +461,8 @@ function renderChat(){
           // Add new todo item
           e.preventDefault();
           const pos=ta.selectionStart;
-          ta.value=ta.value.substring(0,pos)+"\n- [ ] "+ta.value.substring(ta.selectionEnd);
-          ta.selectionStart=ta.selectionEnd=pos+7;
+          ta.value=ta.value.substring(0,pos)+"\n○ "+ta.value.substring(ta.selectionEnd);
+          ta.selectionStart=ta.selectionEnd=pos+3;
           ta.dispatchEvent(new Event("input"));
         } else if(e.key==="Enter"&&!e.shiftKey){
           e.preventDefault();sendChat();
@@ -485,7 +485,7 @@ function toggleTodoMode(){
     const t=document.getElementById("chatTA");
     if(!t)return;
     if(todoMode){
-      if(!savedText.trim()) t.value="- [ ] ";
+      if(!savedText.trim()) t.value="○ ";
       else t.value=savedText;
     } else {
       t.value=savedText;
@@ -498,11 +498,14 @@ function toggleTodoMode(){
 function sendChat(){
   const ta=document.getElementById("chatTA");if(!ta)return;
   let text=ta.value.trim();if(!text)return;
-  // In todo mode, prefix each line with - [ ] if not already
+  // Convert visual ○/● back to - [ ]/- [x], and auto-prefix plain lines in todo mode
   if(todoMode){
     text=text.split('\n').map(l=>{
-      const trimmed=l.trim();
+      let trimmed=l.trim();
       if(!trimmed)return '';
+      // Convert visual circles to markdown
+      if(trimmed.startsWith('○ '))return '- [ ] '+trimmed.substring(2);
+      if(trimmed.startsWith('● '))return '- [x] '+trimmed.substring(2);
       if(/^\s*-\s*\[([ xX])\]/.test(trimmed))return trimmed;
       return '- [ ] '+trimmed;
     }).filter(Boolean).join('\n');
