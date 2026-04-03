@@ -325,7 +325,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v2.6</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v2.7</div>
 
 <script>
 const USERS = {
@@ -1267,10 +1267,10 @@ function _buildRow(r){
 
 function startEditDesc(tid,td,ev){
   if(!canEditDesc())return;
+  if(td.querySelector('.desc-edit-ta'))return; // already editing
   ev.stopPropagation();
   const current=getDesc(tid,TASKS.find(t=>t.id===tid)?.desc||'');
   td.innerHTML=`<textarea class="desc-edit-ta" rows="1">${esc(current)}</textarea>`;
-  td.onclick=null;
   const ta=td.querySelector('textarea');
   if(ta){
     // Auto-size to content
@@ -1298,10 +1298,10 @@ function saveDesc(tid,ta){
 
 function startEditAdmin(tid,td,ev){
   if(!canEditAdminNote())return;
+  if(td.querySelector('.desc-edit-ta'))return;
   ev.stopPropagation();
   const current=getAdminNote(tid);
   td.innerHTML=`<textarea class="desc-edit-ta" rows="1">${esc(current)}</textarea>`;
-  td.onclick=null;
   const ta=td.querySelector('textarea');
   if(ta){
     ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';
