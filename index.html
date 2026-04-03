@@ -362,15 +362,21 @@ function saveState(s){
 
 async function _pushRemote(s){
   try{
-    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`,{
-      method:"PUT",headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},
-      body:JSON.stringify(s)
+    const data=Object.keys(s).length?s:{"_empty":true};
+    const r=await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`,{
+      method:"PUT",
+      headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY,"X-Bin-Versioning":"false"},
+      body:JSON.stringify(data)
     });
+    const j=await r.json();
+    if(!r.ok){console.error("JSONBin PUT error:",j);throw new Error(j.message||"PUT failed");}
     const n=document.getElementById("saveNotice");
-    n.textContent="Saved";setTimeout(()=>n.classList.remove("show"),1200);
+    n.textContent="Saved";n.style.background="#1f6feb";
+    setTimeout(()=>n.classList.remove("show"),1200);
   }catch(e){
+    console.error("Push failed:",e);
     const n=document.getElementById("saveNotice");
-    n.textContent="Save failed!";n.style.background="#f85149";
+    n.textContent="Sync error!";n.style.background="#f85149";
     setTimeout(()=>{n.classList.remove("show");n.style.background="";},3000);
   }
 }
@@ -380,13 +386,20 @@ async function _pullRemote(){
     const r=await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}/latest`,{
       headers:{"X-Master-Key":JSONBIN_KEY}
     });
+    if(!r.ok){console.error("JSONBin GET status:",r.status);return false;}
     const j=await r.json();
-    if(j.record&&typeof j.record==="object"&&!j.record._init){
-      state=j.record;
+    if(j.record&&typeof j.record==="object"){
+      const rec=j.record;
+      // Skip if bin is still initial/empty placeholder
+      if(rec._init||rec._empty||rec._v) {
+        // Bin has no real data yet — keep local state
+        return false;
+      }
+      state=rec;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       return true;
     }
-  }catch(e){console.warn("Failed to pull remote:",e);}
+  }catch(e){console.error("Pull failed:",e);}
   return false;
 }
 
