@@ -699,16 +699,27 @@ function closeGif(){
   document.getElementById("gifOverlay").classList.add("hidden");
   document.getElementById("gifFull").src="";
 }
-function toggleGifPlay(){
+async function toggleGifPlay(){
   const img=document.getElementById("gifFull");
   const btn=document.getElementById("gifPlayBtn");
   if(gifPlaying){
-    // Freeze: draw current frame to canvas, replace img src with canvas data
-    const c=document.createElement("canvas");
-    c.width=img.naturalWidth;c.height=img.naturalHeight;
-    c.getContext("2d").drawImage(img,0,0);
-    img.dataset.origSrc=img.src;
-    img.src=c.toDataURL();
+    // Freeze current frame using createImageBitmap (captures actual displayed frame)
+    try{
+      const bmp=await createImageBitmap(img);
+      const c=document.createElement("canvas");
+      c.width=bmp.width;c.height=bmp.height;
+      c.getContext("2d").drawImage(bmp,0,0);
+      bmp.close();
+      img.dataset.origSrc=img.src;
+      img.src=c.toDataURL();
+    }catch(e){
+      // Fallback
+      const c=document.createElement("canvas");
+      c.width=img.naturalWidth;c.height=img.naturalHeight;
+      c.getContext("2d").drawImage(img,0,0);
+      img.dataset.origSrc=img.src;
+      img.src=c.toDataURL();
+    }
     btn.textContent="▶";gifPlaying=false;
   } else {
     img.src=img.dataset.origSrc;
