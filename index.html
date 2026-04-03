@@ -276,7 +276,11 @@ let currentUser=null;
 async function tryLogin(){const p=document.getElementById("loginPass").value.trim();if(!p)return;const h=await sha256(p);for(const[id,u]of Object.entries(USERS)){if(u.hash===h){currentUser={id,...u};sessionStorage.setItem("kh_user",id);showLoggedIn();return;}}document.getElementById("loginError").textContent="Wrong password";}
 function guestLogin(){currentUser={id:"guest",display:"Guest",role:"guest"};sessionStorage.setItem("kh_user","guest");showLoggedIn();}
 document.getElementById("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
-function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;render();}
+async function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
+  // Pull latest data from remote
+  const pulled=await _pullRemote();if(pulled)runMigrations();
+  render();
+}
 function logout(){sessionStorage.removeItem("kh_user");currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
 (async function(){const s=sessionStorage.getItem("kh_user");if(s==="guest")guestLogin();else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}})();
 
@@ -323,17 +327,63 @@ const TASKS=[
 const CAT_LABELS={voronka:"Воронки",fpv:"ФПВ дрон",vrezka:"Врезка",angar:"Ангар",puli:"Пули/Царапины",vzryv:"Взрыв/Сажа",dym:"Дым",other:"Другое"};
 const ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}];
 const STORAGE_KEY="kh_vfx_tracker";
+const JSONBIN_ID="69cfd549aaba882197c01bcf";
+const JSONBIN_KEY="$2a$10$tqV1kM2iCXaMkmpkF0.O4uUP66/Kf7x5dFpuURQijLUlGj8T4xSF2";
+let _saving=false,_pendingSave=false;
+
 function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch{return {};}}
-function saveState(s){localStorage.setItem(STORAGE_KEY,JSON.stringify(s));const n=document.getElementById("saveNotice");n.classList.add("show");setTimeout(()=>n.classList.remove("show"),1200);}
+
+function saveState(s){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
+  const n=document.getElementById("saveNotice");
+  n.textContent="Saving...";n.classList.add("show");
+  // Debounced remote save
+  if(_saving){_pendingSave=true;return;}
+  _saving=true;
+  _pushRemote(s).finally(()=>{
+    _saving=false;
+    if(_pendingSave){_pendingSave=false;saveState(state);}
+  });
+}
+
+async function _pushRemote(s){
+  try{
+    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`,{
+      method:"PUT",headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},
+      body:JSON.stringify(s)
+    });
+    const n=document.getElementById("saveNotice");
+    n.textContent="Saved";setTimeout(()=>n.classList.remove("show"),1200);
+  }catch(e){
+    const n=document.getElementById("saveNotice");
+    n.textContent="Save failed!";n.style.background="#f85149";
+    setTimeout(()=>{n.classList.remove("show");n.style.background="";},3000);
+  }
+}
+
+async function _pullRemote(){
+  try{
+    const r=await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}/latest`,{
+      headers:{"X-Master-Key":JSONBIN_KEY}
+    });
+    const j=await r.json();
+    if(j.record&&typeof j.record==="object"&&!j.record._init){
+      state=j.record;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      return true;
+    }
+  }catch(e){console.warn("Failed to pull remote:",e);}
+  return false;
+}
+
 let state=loadState();
 
-// Migrate old formats
-(function(){let c=false;for(const[k,d]of Object.entries(state)){
+function runMigrations(){let c=false;for(const[k,d]of Object.entries(state)){
   if(d.notes&&!d.adminNote){d.adminNote=d.notes;delete d.notes;c=true;}
   if(typeof d.artistNote==="string"&&d.artistNote){d.artistNotes=[{id:0,author:"artist",text:d.artistNote}];delete d.artistNote;c=true;}
-  // Ensure IDs on artistNotes
   if(d.artistNotes){d.artistNotes.forEach((n,i)=>{if(n.id===undefined){n.id=i;c=true;}});}
-}if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));})();
+}if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+runMigrations();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
 function getStatus(id){return state[id]?.status||"todo";}
@@ -733,6 +783,16 @@ function exportCSV(){
   const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kh_vfx_tracker.csv";a.click();
 }
 render();
+
+// Auto-sync: pull remote every 30s
+setInterval(async()=>{
+  if(_saving)return;
+  const pulled=await _pullRemote();
+  if(pulled){runMigrations();render();
+    // Re-render chat if open
+    if(noteTaskId&&noteType==='chat')renderChat();
+  }
+},30000);
 </script>
 </body>
 </html>
