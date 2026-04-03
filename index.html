@@ -250,8 +250,8 @@
   <thead><tr>
     <th onclick="sortTable(0)">#</th>
     <th onclick="sortTable(1)">ID</th>
-    <th onclick="sortTable(2)">Description</th>
     <th>Preview</th>
+    <th onclick="sortTable(2)">Description</th>
     <th onclick="sortTable(3)">Category</th>
     <th onclick="sortTable(4)">TC In</th>
     <th onclick="sortTable(5)">TC Out</th>
@@ -641,15 +641,15 @@ function render(){
   tbody.innerHTML=rows.map(r=>{
     const st=r.status,stClass="s-"+st,editSt=canEditStatus(r.id),adm=canAssign();
     const assignCls=r.assignee?" assign-"+r.assignee:"";
-    const an=getAdminNote(r.id);const anPrev=trunc(an,24);
+    const an=getAdminNote(r.id);
     const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
     const countBadge=cp.count?`<span class="msg-count">${cp.count}</span>`:"";
     const artistOpts=ARTISTS.map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
     return `<tr>
       <td style="color:#484f58">${r.idx}</td>
       <td class="id-cell">${r.id}</td>
-      <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
       <td class="gif-cell">${hasGif(r.id)?`<img class="gif-thumb" src="gif/${r.id}.gif" onclick="openGif('${r.id}')" loading="lazy">`:'<div class="gif-none">—</div>'}</td>
+      <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
       <td class="category-cell"><span class="cat-tag cat-${r.cat}">${CAT_LABELS[r.cat]}</span></td>
       <td class="tc-cell">${r.tcIn}</td>
       <td class="tc-cell">${r.tcOut}</td>
@@ -658,7 +658,7 @@ function render(){
         <option value="todo" ${st==="todo"?"selected":""}>TODO</option><option value="progress" ${st==="progress"?"selected":""}>In Progress</option>
         <option value="review" ${st==="review"?"selected":""}>Review</option><option value="done" ${st==="done"?"selected":""}>Done</option>
         <option value="skip" ${st==="skip"?"selected":""}>Skip</option></select></td>
-      <td><div class="note-cell type-admin${an?' has-text':''}" onclick="openNote('${r.id}','admin')">${anPrev||'...'}</div></td>
+      <td class="desc-cell${canEditAdminNote()?' editable':''}" ${canEditAdminNote()?`onclick="startEditAdmin('${r.id}',this,event)"`:''} data-tid="${r.id}">${an||'<span style="color:#484f58">...</span>'}</td>
       <td><div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div></td>
     </tr>`;
   }).join("");
@@ -690,6 +690,32 @@ function saveDesc(tid,ta){
   if(!val){render();return;}
   if(!state[tid])state[tid]={};
   state[tid].desc=val;
+  saveState(state);
+  render();
+}
+
+function startEditAdmin(tid,td,ev){
+  if(!canEditAdminNote())return;
+  ev.stopPropagation();
+  const current=getAdminNote(tid);
+  td.innerHTML=`<textarea class="desc-edit-ta" rows="1">${esc(current)}</textarea>`;
+  td.onclick=null;
+  const ta=td.querySelector('textarea');
+  if(ta){
+    ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';
+    ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
+    ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';});
+    ta.addEventListener('blur',()=>saveAdmin(tid,ta));
+    ta.addEventListener('keydown',e=>{
+      if(e.key==='Escape'){ta.dataset.cancel='1';ta.blur();}
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ta.blur();}
+    });
+  }
+}
+function saveAdmin(tid,ta){
+  if(ta.dataset.cancel==='1'){render();return;}
+  if(!state[tid])state[tid]={};
+  state[tid].adminNote=ta.value.trim();
   saveState(state);
   render();
 }
