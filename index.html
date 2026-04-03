@@ -124,6 +124,18 @@
   .chat-action-btn { background: none; border: none; color: #484f58; font-size: 14px; cursor: pointer; padding: 2px 4px; border-radius: 3px; }
   .chat-action-btn:hover { color: #c9d1d9; background: rgba(255,255,255,0.05); }
   .chat-deleted-label { font-size: 11px; color: #484f58; }
+  .chat-restore-btn { background: none; border: none; color: #3fb950; font-size: 11px; cursor: pointer; margin-left: 8px; text-decoration: underline; }
+  .chat-restore-btn:hover { color: #56d364; }
+
+  /* Todo list in chat */
+  .chat-todo { list-style: none; padding: 0; margin: 4px 0 0; }
+  .chat-todo li { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; line-height: 1.4; }
+  .chat-todo-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #484f58; background: none; cursor: pointer; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: 0.15s; }
+  .chat-todo-check:hover { border-color: #8b949e; }
+  .chat-todo-check.checked { border-color: #3fb950; background: #3fb950; }
+  .chat-todo-check.checked::after { content: "\\2713"; color: #0d1117; font-size: 12px; font-weight: 700; }
+  .chat-todo-text { flex: 1; }
+  .chat-todo-text.done { text-decoration: line-through; opacity: 0.5; }
 
   /* Chat input area */
   .chat-input-area { flex-shrink: 0; }
@@ -332,6 +344,50 @@ function openNote(taskId,type){
   document.getElementById("noteOverlay").classList.remove("hidden");
 }
 
+function renderMsgContent(text, mid) {
+  // Check if message contains todo items: lines starting with - [ ] or - [x]
+  const lines = text.split('\n');
+  const hasTodo = lines.some(l => /^\s*-\s*\[([ xX])\]/.test(l));
+  if (!hasTodo) return `<div>${esc(text)}</div>`;
+
+  let html = '<ul class="chat-todo">';
+  let lineIdx = 0;
+  for (const line of lines) {
+    const todoMatch = line.match(/^\s*-\s*\[([ xX])\]\s*(.*)/);
+    if (todoMatch) {
+      const checked = todoMatch[1].toLowerCase() === 'x';
+      const label = todoMatch[2];
+      const canToggle = canChat(noteTaskId);
+      html += `<li>`;
+      html += `<button class="chat-todo-check${checked?' checked':''}" ${canToggle?`onclick="toggleTodo(${mid},${lineIdx})"`:''} title="${checked?'Uncheck':'Check'}"></button>`;
+      html += `<span class="chat-todo-text${checked?' done':''}">${esc(label)}</span>`;
+      html += `</li>`;
+    } else if (line.trim()) {
+      html += `<li><span class="chat-todo-text">${esc(line)}</span></li>`;
+    }
+    lineIdx++;
+  }
+  html += '</ul>';
+  return html;
+}
+
+function toggleTodo(mid, lineIdx) {
+  const msgs = getChat(noteTaskId);
+  const m = msgs.find(x => x.id === mid);
+  if (!m || m.deleted) return;
+  const lines = m.text.split('\n');
+  if (lineIdx >= lines.length) return;
+  const line = lines[lineIdx];
+  const match = line.match(/^(\s*-\s*\[)([ xX])(\]\s*.*)/);
+  if (!match) return;
+  const newCheck = match[2].toLowerCase() === 'x' ? ' ' : 'x';
+  lines[lineIdx] = match[1] + newCheck + match[3];
+  m.text = lines.join('\n');
+  saveState(state);
+  renderChat();
+  render();
+}
+
 function renderChat(){
   const msgs=getChat(noteTaskId),canSend=canChat(noteTaskId);
   const body=document.getElementById("notePanelBody");
@@ -344,7 +400,8 @@ function renderChat(){
     if(!del&&canSend){
       html+=`<div class="chat-msg-actions">`;
       html+=`<button class="chat-action-btn" onclick="replyTo(${m.id})" title="Reply">&#8617;</button>`;
-      if(isAdmin()||(isArtist()&&!isAdm)) html+=`<button class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete">&#10005;</button>`;
+      // Artist can delete only own. Admin can delete any.
+      if(isAdmin()||(isArtist()&&m.author==="artist")) html+=`<button class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete">&#10005;</button>`;
       html+=`</div>`;
     }
     const timeStr=m.ts?new Date(m.ts).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
@@ -354,8 +411,12 @@ function renderChat(){
       const preview=orig?(orig.deleted?'deleted message':trunc(orig.text,40)):'...';
       html+=`<div class="chat-msg-reply" onclick="scrollToMsg(${m.replyTo})">${esc(preview)}</div>`;
     }
-    if(del) html+=`<span class="chat-deleted-label">message deleted</span>`;
-    else html+=`<div>${esc(m.text)}</div>`;
+    if(del){
+      html+=`<span class="chat-deleted-label">message deleted</span>`;
+      if(isAdmin()) html+=`<button class="chat-restore-btn" onclick="restoreMsg(${m.id})">restore</button>`;
+    } else {
+      html+=renderMsgContent(m.text, m.id);
+    }
     html+=`</div>`;
   });
   html+='</div>';
@@ -363,7 +424,7 @@ function renderChat(){
     html+=`<div class="chat-input-area">`;
     html+=`<div class="chat-reply-preview hidden" id="chatReplyPreview"><span id="chatReplyText"></span><button class="chat-reply-close" onclick="cancelReply()">&times;</button></div>`;
     html+=`<div class="chat-input-row"><textarea id="chatTA" placeholder="Enter to send, Shift+Enter for new line..." rows="1"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
-    html+=`<div class="chat-hint">Enter — send &nbsp;|&nbsp; Shift+Enter — new line</div>`;
+    html+=`<div class="chat-hint">Enter — send &nbsp;|&nbsp; Shift+Enter — new line &nbsp;|&nbsp; <code>- [ ]</code> — todo list</div>`;
     html+=`</div>`;
   }
   body.innerHTML=html;
@@ -398,13 +459,27 @@ function deleteMsg(mid){
   const msgs=getChat(noteTaskId);
   const m=msgs.find(x=>x.id===mid);
   if(!m)return;
-  // Admin can delete any, artist can delete own (non-admin) messages
-  if(isAdmin()||(isArtist()&&m.author!=="admin")){
+  // Artist can only delete own messages. Admin can delete any.
+  if(isAdmin()||(isArtist()&&m.author==="artist")){
+    m.deletedText=m.text; // preserve for admin restore
     m.deleted=true;m.text="";
     saveState(state);
     renderChat();
     render();
   }
+}
+
+function restoreMsg(mid){
+  if(!isAdmin())return;
+  const msgs=getChat(noteTaskId);
+  const m=msgs.find(x=>x.id===mid);
+  if(!m||!m.deleted)return;
+  m.text=m.deletedText||"[restored]";
+  m.deleted=false;
+  delete m.deletedText;
+  saveState(state);
+  renderChat();
+  render();
 }
 
 function replyTo(mid){
