@@ -389,7 +389,10 @@ async function _pullRemote(){
     if(!r.ok)return false;
     const rows=await r.json();
     if(rows.length&&rows[0].data&&Object.keys(rows[0].data).length){
-      state=rows[0].data;
+      const remote=rows[0].data;
+      // Only update if data actually changed
+      if(JSON.stringify(remote)===JSON.stringify(state))return false;
+      state=remote;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       return true;
     }
