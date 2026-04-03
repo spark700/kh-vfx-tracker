@@ -362,7 +362,8 @@ function saveState(s){
 
 async function _pushRemote(s){
   try{
-    const data=Object.keys(s).length?s:{"_empty":true};
+    const clean={...s};delete clean._v;delete clean._init;delete clean._empty;
+    const data=Object.keys(clean).length?clean:{"_placeholder":true};
     const r=await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`,{
       method:"PUT",
       headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY,"X-Bin-Versioning":"false"},
@@ -391,10 +392,8 @@ async function _pullRemote(){
     if(j.record&&typeof j.record==="object"){
       const rec=j.record;
       // Skip if bin is still initial/empty placeholder
-      if(rec._init||rec._empty||rec._v) {
-        // Bin has no real data yet — keep local state
-        return false;
-      }
+      const keys=Object.keys(rec).filter(k=>!k.startsWith("_"));
+      if(!keys.length) return false;
       state=rec;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       return true;
