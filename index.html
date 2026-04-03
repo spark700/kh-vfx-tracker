@@ -766,6 +766,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
 let _sgif=null, _gifPaused=false, _gifUpdater=null, _gifLoaded=false, _gifLoadingInterval=null, _gifCurrentId=null;
+let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null;
 
 function openGif(id){
   // Clean up previous
@@ -872,8 +873,6 @@ function seekGif(val){
 }
 
 // --- DRAWING ---
-let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null;
-
 function _initDrawCanvas(){
   // Create draw canvas overlay matching the gif canvas size
   const jsgif=document.querySelector(".gif-player-area .jsgif");
