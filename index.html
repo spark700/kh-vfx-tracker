@@ -1073,7 +1073,7 @@ function copyAuthLink(id){
   const chunks=lt.match(/.{1,4}/g)||[];
   const ID=id.toUpperCase();
   const encoded=chunks.join('_'+ID+'_');
-  const url=base+'?auth='+ID+'_'+encoded;
+  const url=base+'?auth='+ID+'_'+encoded+'_'+ID;
   navigator.clipboard.writeText(url);
   // Flash feedback
   const btn=event.target;
