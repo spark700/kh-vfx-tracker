@@ -237,8 +237,11 @@
   .draw-size::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; cursor: pointer; }
   td.desc-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
   td.desc-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
-  .shot-info-cell { font-size: 10px; color: #8b949e; line-height: 1.3; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-  .shot-info-cell:hover { color: #58a6ff; }
+  .shot-info-cell { font-size: 10px; color: #8b949e; cursor: pointer; min-width: 240px; }
+  .shot-info-cell:hover { color: #c9d1d9; }
+  .si-preview { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px 12px; }
+  .si-preview span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8b949e; }
+  .si-preview span.has { color: #c9d1d9; }
   .si-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: flex; align-items: center; justify-content: center; }
   .si-modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 420px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; }
   .si-modal-header { padding: 14px 18px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
@@ -1015,12 +1018,8 @@ function getDesc(id,fallback){return state[id]?.desc||fallback;}
 function getShotInfo(id){return state[id]?.shotInfo||{};}
 function _renderShotInfo(id){
   const si=getShotInfo(id);
-  if(!si.camera&&!si.lens&&!si.colorSpace&&!si.gamma&&!si.sensor)return'<span style="color:#484f58">...</span>';
-  const parts=[];
-  if(si.camera)parts.push(si.camera);
-  if(si.lens)parts.push(si.lens);
-  if(si.colorSpace)parts.push(si.colorSpace);
-  return esc(parts.join(' · '))||'<span style="color:#484f58">...</span>';
+  const v=(k)=>si[k]?`<span class="has">${esc(si[k])}</span>`:`<span>—</span>`;
+  return`<div class="si-preview">${v("camera")}${v("resolution")}${v("colorSpace")}${v("lens")}${v("fps")}${v("gamma")}${v("focalLength")}${v("shutterAngle")}${v("bitDepth")}</div>`;
 }
 const SI_OPTIONS={
   camera:[
