@@ -138,6 +138,7 @@
   .cat-vrezka { background: #00261c; color: #3fb950; } .cat-angar { background: #30160a; color: #f0883e; }
   .cat-puli { background: #300018; color: #f778ba; } .cat-vzryv { background: #2a0000; color: #f85149; }
   .cat-dym { background: #1a1a2e; color: #8b949e; } .cat-other { background: #1c1c1c; color: #8b949e; }
+  .cat-select { background: #0d1117; border: 1px solid #30363d; padding: 2px 6px; border-radius: 12px; font-size: 11px; font-weight: 600; cursor: pointer; appearance: none; -webkit-appearance: none; }
   .status-select, .assign-select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; }
   .status-select:disabled, .assign-select:disabled { opacity: 0.4; cursor: not-allowed; }
   .status-select.s-todo { border-color: #f85149; color: #f85149; }
@@ -439,6 +440,29 @@ const TASKS=[
   {id:"KH_01_336",desc:"Добавляем Ангар",cat:"angar",tcIn:"1:20:04:08",tcOut:"1:20:06:01"},
 ];
 const CAT_LABELS={voronka:"Воронки",fpv:"ФПВ дрон",vrezka:"Врезка",angar:"Ангар",puli:"Пули/Царапины",vzryv:"Взрыв/Сажа",dym:"Дым",other:"Другое"};
+const CAT_COLORS={voronka:"#d29922",fpv:"#bc8cff",vrezka:"#3fb950",angar:"#f0883e",puli:"#f778ba",vzryv:"#f85149",dym:"#8b949e",other:"#8b949e"};
+function getCat(id){return state[id]?.cat||TASKS.find(t=>t.id===id)?.cat||"other";}
+function getAllCatKeys(){const keys=new Set(Object.keys(CAT_LABELS));TASKS.forEach(t=>keys.add(t.cat));Object.values(state).forEach(s=>{if(s.cat)keys.add(s.cat);});return[...keys];}
+function _catSelect(id,cat){
+  const keys=getAllCatKeys();
+  const opts=keys.map(k=>`<option value="${k}" ${cat===k?"selected":""}>${CAT_LABELS[k]||k}</option>`).join("");
+  const color=CAT_COLORS[cat]||"#8b949e";
+  return`<select class="cat-select" style="color:${color};border-color:${color}" onchange="setCat('${id}',this.value)">${opts}<option value="__new__">+ New...</option></select>`;
+}
+function setCat(id,val){
+  if(!isAdmin())return;
+  if(val==="__new__"){
+    const name=prompt("New category name:");
+    if(!name||!name.trim())return;
+    const key=name.trim().toLowerCase().replace(/[^a-zа-яёіїє0-9]/gi,"_");
+    if(!CAT_LABELS[key]){CAT_LABELS[key]=name.trim();CAT_COLORS[key]="#8b949e";}
+    val=key;
+  }
+  if(!state[id])state[id]={};
+  state[id].cat=val;
+  saveState(state);
+  render();
+}
 const ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}];
 const STORAGE_KEY="kh_vfx_tracker";
 const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
@@ -1455,7 +1479,7 @@ function _buildRow(r){
     <td class="id-cell">${r.id}</td>
     <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
-    <td class="category-cell"><span class="cat-tag cat-${r.cat}">${CAT_LABELS[r.cat]}</span></td>
+    <td class="category-cell">${isAdmin()?_catSelect(r.id,getCat(r.id)):`<span class="cat-tag cat-${getCat(r.id)}">${CAT_LABELS[getCat(r.id)]||getCat(r.id)}</span>`}</td>
     <td class="tc-cell">${r.tcIn}</td>
     <td class="tc-cell">${r.tcOut}</td>
     <td><select class="assign-select${assignCls}" onchange="setAssignee('${r.id}',this.value)" ${adm?"":"disabled"}><option value="" ${!r.assignee?"selected":""}>—</option>${artistOpts}</select></td>
@@ -1536,7 +1560,7 @@ document.querySelectorAll(".artist-filter-btn").forEach(b=>{b.addEventListener("
 
 function exportCSV(){
   let csv="ID,Description,Category,TC In,TC Out,Artist,Status,Admin Notes,Chat\n";
-  TASKS.forEach(t=>{const st=getStatus(t.id),ar=getAssignee(t.id);const an=getAdminNote(t.id).replace(/"/g,'""');const ch=getChat(t.id).filter(m=>!m.deleted).map(m=>`[${m.author}] ${m.text}`).join("\n").replace(/"/g,'""');csv+=`"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${ar}","${st}","${an}","${ch}"\n`;});
+  TASKS.forEach(t=>{const st=getStatus(t.id),ar=getAssignee(t.id);const an=getAdminNote(t.id).replace(/"/g,'""');const ch=getChat(t.id).filter(m=>!m.deleted).map(m=>`[${m.author}] ${m.text}`).join("\n").replace(/"/g,'""');csv+=`"${t.id}","${t.desc}","${CAT_LABELS[getCat(t.id)]||getCat(t.id)}","${t.tcIn}","${t.tcOut}","${ar}","${st}","${an}","${ch}"\n`;});
   const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kh_vfx_tracker.csv";a.click();
 }
 render();
