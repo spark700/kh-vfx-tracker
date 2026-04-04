@@ -239,7 +239,7 @@
   td.desc-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
   .shot-info-cell { font-size: 10px; color: #8b949e; cursor: pointer; min-width: 240px; }
   .shot-info-cell:hover { color: #c9d1d9; }
-  .si-preview { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px 12px; }
+  .si-preview { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 12px; }
   .si-preview span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8b949e; }
   .si-preview span.has { color: #c9d1d9; }
   .si-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: flex; align-items: center; justify-content: center; }
@@ -1018,8 +1018,8 @@ function getDesc(id,fallback){return state[id]?.desc||fallback;}
 function getShotInfo(id){return state[id]?.shotInfo||{};}
 function _renderShotInfo(id){
   const si=getShotInfo(id);
-  const v=(k,label)=>si[k]?`<span><span style="color:#484f58">${label}</span> <span class="has">${esc(si[k])}</span></span>`:`<span><span style="color:#484f58">${label}</span> —</span>`;
-  return`<div class="si-preview">${v("camera","cam")}${v("lens","lens")}${v("focalLength","fl")}${v("resolution","res")}${v("fps","fps")}${v("shutterAngle","shtr")}${v("colorSpace","cs")}${v("gamma","γ")}${v("bitDepth","bit")}</div>`;
+  const v=(k,label)=>`<span><span style="color:#484f58;font-size:9px;display:block;line-height:1">${label}</span><span class="${si[k]?'has':''}" style="display:block">${si[k]?esc(si[k]):'—'}</span></span>`;
+  return`<div class="si-preview">${v("camera","Camera")}${v("lens","Lens")}${v("focalLength","Focal")}${v("resolution","Resolution")}${v("fps","FPS")}${v("shutterAngle","Shutter")}${v("colorSpace","Color Space")}${v("gamma","Gamma")}${v("bitDepth","Bit Depth")}</div>`;
 }
 const SI_OPTIONS={
   camera:[
