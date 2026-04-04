@@ -66,10 +66,6 @@
   .shot-header-tc { font-family: 'SF Mono', monospace; font-size: 12px; color: #8b949e; }
   .shot-close { background: none; border: none; color: #8b949e; font-size: 24px; cursor: pointer; padding: 0 4px; }
   .shot-close:hover { color: #fff; }
-  .shot-tabs { display: flex; gap: 0; padding: 0 20px; border-bottom: 1px solid #30363d; }
-  .shot-tab { padding: 10px 20px; font-size: 13px; color: #8b949e; cursor: pointer; border-bottom: 2px solid transparent; transition: .15s; background: none; border-top: none; border-left: none; border-right: none; }
-  .shot-tab:hover { color: #c9d1d9; }
-  .shot-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
   .shot-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; }
   .shot-media-card { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; overflow: hidden; cursor: pointer; transition: 0.15s; }
   .shot-media-card:hover { border-color: #58a6ff; transform: scale(1.02); }
@@ -83,27 +79,6 @@
   .shot-add-card:hover { border-color: #3fb950; }
   .shot-add-icon { font-size: 48px; color: #30363d; line-height: 1; }
   .shot-add-card:hover .shot-add-icon { color: #3fb950; }
-  .files-panel { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-  .files-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .files-toolbar .files-path { flex: 1; font-family: 'SF Mono', monospace; font-size: 12px; color: #8b949e; }
-  .files-btn { background: rgba(255,255,255,0.08); border: 1px solid #30363d; color: #c9d1d9; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; }
-  .files-btn:hover { background: rgba(255,255,255,0.15); }
-  .files-btn.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
-  .files-btn.primary:hover { background: #388bfd; }
-  .files-table { width: 100%; border-collapse: collapse; }
-  .files-table th { text-align: left; padding: 8px 10px; font-size: 11px; color: #8b949e; font-weight: 600; border-bottom: 1px solid #30363d; text-transform: uppercase; letter-spacing: .5px; }
-  .files-table td { padding: 8px 10px; font-size: 13px; color: #c9d1d9; border-bottom: 1px solid #21262d; }
-  .files-table tr:hover td { background: #21262d; }
-  .files-table .f-icon { font-size: 16px; margin-right: 6px; }
-  .files-table .f-name { cursor: pointer; }
-  .files-table .f-name:hover { color: #58a6ff; }
-  .files-table .f-size { color: #8b949e; font-family: 'SF Mono', monospace; font-size: 12px; white-space: nowrap; }
-  .files-table .f-date { color: #8b949e; font-size: 12px; white-space: nowrap; }
-  .files-table .f-author { color: #8b949e; font-size: 12px; }
-  .files-table .f-dl { background: none; border: none; color: #58a6ff; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
-  .files-table .f-dl:hover { background: rgba(88,166,255,0.15); }
-  .files-drop { border: 2px dashed #30363d; border-radius: 8px; padding: 30px; text-align: center; color: #484f58; font-size: 13px; cursor: pointer; transition: .15s; }
-  .files-drop:hover { border-color: #3fb950; color: #3fb950; }
   .version-thumb { width: 320px; height: 180px; background: #21262d; display: flex; align-items: center; justify-content: center; }
   .version-num { font-size: 32px; font-weight: 700; color: #30363d; font-family: 'SF Mono', monospace; }
   .upload-progress-ring { width: 320px; height: 100px; display: flex; align-items: center; justify-content: center; }
@@ -357,10 +332,6 @@
       <span class="shot-header-desc" id="shotDesc"></span>
       <span class="shot-header-tc" id="shotTC"></span>
       <button class="shot-close" onclick="closeShot()">&times;</button>
-    </div>
-    <div class="shot-tabs">
-      <button class="shot-tab active" id="shotTabVersions" onclick="switchShotTab('versions')">Versions</button>
-      <button class="shot-tab" id="shotTabFiles" onclick="switchShotTab('files')">Files</button>
     </div>
     <div class="shot-body" id="shotBody"></div>
   </div>
@@ -1693,9 +1664,7 @@ function trunc(s,n){return !s?"":s.length>n?s.substring(0,n)+"...":s;}
 // --- SHOT DETAIL ---
 let _shotCurrentId=null;
 function openShot(id){
-  _shotCurrentId=id;_shotTab='versions';_filesPath=[];
-  document.getElementById("shotTabVersions").classList.add("active");
-  document.getElementById("shotTabFiles").classList.remove("active");
+  _shotCurrentId=id;
   const task=TASKS.find(t=>t.id===id);
   if(!task)return;
   const cat=getCat(id);
@@ -1767,100 +1736,8 @@ async function updateOriginal(shotId,input){
   delete _uploads[shotId];
   if(_shotCurrentId===shotId)_renderShotBody(shotId);
 }
-let _shotTab='versions';
-function switchShotTab(tab){
-  _shotTab=tab;
-  document.getElementById("shotTabVersions").classList.toggle("active",tab==='versions');
-  document.getElementById("shotTabFiles").classList.toggle("active",tab==='files');
-  if(_shotCurrentId){
-    if(tab==='versions')_renderShotBody(_shotCurrentId);
-    else _renderShotFiles(_shotCurrentId);
-  }
-}
-const MOCK_FILES={
-  "KH_01_198":[
-    {name:"nuke",type:"folder",children:[
-      {name:"comp_v3.nk",size:"45.2 MB",author:"Nikita",date:"2026-04-03"},
-      {name:"comp_v2.nk",size:"42.8 MB",author:"Nikita",date:"2026-04-01"},
-      {name:"comp_v1.nk",size:"38.1 MB",author:"Nikita",date:"2026-03-28"},
-    ]},
-    {name:"ae",type:"folder",children:[
-      {name:"voronka_comp.aep",size:"128 MB",author:"Igor",date:"2026-04-02"},
-    ]},
-    {name:"footage",type:"folder",children:[
-      {name:"KH_01_198_plate.mov",size:"1.2 GB",author:"Admin",date:"2026-03-25"},
-      {name:"KH_01_198_clean.mov",size:"980 MB",author:"Admin",date:"2026-03-25"},
-    ]},
-    {name:"ref",type:"folder",children:[
-      {name:"explosion_ref_01.mp4",size:"24 MB",author:"Admin",date:"2026-03-20"},
-      {name:"crater_photo.jpg",size:"3.2 MB",author:"Admin",date:"2026-03-20"},
-    ]},
-    {name:"KH_01_198_brief.pdf",size:"1.1 MB",author:"Admin",date:"2026-03-18"},
-  ]
-};
-let _filesPath=[];
-function _renderShotFiles(id){
-  const body=document.getElementById("shotBody");
-  const mockRoot=MOCK_FILES[id]||[
-    {name:"footage",type:"folder",children:[
-      {name:id+"_plate.mov",size:"1.5 GB",author:"Admin",date:"2026-03-25"}
-    ]},
-    {name:id+"_brief.pdf",size:"0.8 MB",author:"Admin",date:"2026-03-20"},
-  ];
-  // Navigate to current path
-  let items=mockRoot;
-  let breadcrumb=id;
-  for(const p of _filesPath){
-    const folder=items.find(f=>f.name===p&&f.type==='folder');
-    if(folder){items=folder.children||[];breadcrumb+=" / "+p;}
-    else break;
-  }
-  let html=`<div class="files-panel">`;
-  html+=`<div class="files-toolbar">`;
-  html+=`<span class="files-path">📁 ${breadcrumb}</span>`;
-  html+=`<button class="files-btn" onclick="alert('Mock: download all as ZIP')">⬇ Download All</button>`;
-  html+=`<button class="files-btn primary" onclick="alert('Mock: upload files')">+ Upload</button>`;
-  html+=`</div>`;
-  html+=`<table class="files-table"><thead><tr><th>Name</th><th>Size</th><th>Author</th><th>Date</th><th></th></tr></thead><tbody>`;
-  if(_filesPath.length>0){
-    html+=`<tr><td class="f-name" onclick="_filesPath.pop();_renderShotFiles('${id}')"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td></tr>`;
-  }
-  for(const f of items){
-    if(f.type==='folder'){
-      html+=`<tr>
-        <td class="f-name" onclick="_filesPath.push('${f.name}');_renderShotFiles('${id}')"><span class="f-icon">📁</span>${esc(f.name)}</td>
-        <td class="f-size">${f.children?.length||0} items</td>
-        <td class="f-author"></td><td class="f-date"></td>
-        <td><button class="f-dl" onclick="alert('Mock: download folder')" title="Download">⬇</button></td>
-      </tr>`;
-    } else {
-      html+=`<tr>
-        <td><span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
-        <td class="f-size">${f.size||''}</td>
-        <td class="f-author">${f.author||''}</td>
-        <td class="f-date">${f.date||''}</td>
-        <td><button class="f-dl" onclick="alert('Mock: download ${esc(f.name)}')" title="Download">⬇</button></td>
-      </tr>`;
-    }
-  }
-  html+=`</tbody></table>`;
-  html+=`<div class="files-drop" onclick="alert('Mock: drag & drop upload')">Drop files here or click to upload</div>`;
-  html+=`</div>`;
-  body.innerHTML=html;
-}
-function _fileIcon(name){
-  const ext=name.split('.').pop().toLowerCase();
-  if(['nk','nuke'].includes(ext))return'🔶';
-  if(['aep','aet'].includes(ext))return'🟣';
-  if(['mov','mp4','avi','mxf'].includes(ext))return'🎬';
-  if(['exr','dpx','tif','tiff','png','jpg','jpeg'].includes(ext))return'🖼️';
-  if(['pdf'].includes(ext))return'📄';
-  return'📎';
-}
 function closeShot(){
-  _shotCurrentId=null;_shotTab='versions';_filesPath=[];
-  document.getElementById("shotTabVersions").classList.add("active");
-  document.getElementById("shotTabFiles").classList.remove("active");
+  _shotCurrentId=null;
   document.getElementById("shotOverlay").classList.add("hidden");
 }
 function _playVersion(id,idx){
