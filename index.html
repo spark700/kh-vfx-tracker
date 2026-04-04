@@ -825,6 +825,7 @@ function saveNote(){
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("noteOverlay").classList.contains("hidden"))closeNote();});
 
+const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
 let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=24;
@@ -877,7 +878,7 @@ function openGif(id){
     _gifUpdater=requestAnimationFrame(_tickUpdate);
   }
 
-  vid.src="video/"+id+".mp4";
+  vid.src=CDN_BASE+"/video/"+id+".mp4";
   vid.load();
   _gifPaused=true;
   document.getElementById("gifPlayBtn").textContent="❚❚";
@@ -1452,7 +1453,7 @@ function _buildRow(r){
   return `<tr>
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-cell">${r.id}</td>
-    <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
+    <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
     <td class="category-cell"><span class="cat-tag cat-${r.cat}">${CAT_LABELS[r.cat]}</span></td>
     <td class="tc-cell">${r.tcIn}</td>
