@@ -390,7 +390,7 @@
 <div class="gif-overlay hidden" id="gifOverlay" onclick="if(event.target===this)closeGif()">
   <button class="gif-close-btn" onclick="closeGif()">&times;</button>
   <div class="gif-player-area" id="gifPlayerArea">
-    <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff;margin-bottom:8px"></div>
+    <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff;margin-bottom:8px;align-self:flex-start"></div>
     <div class="player-with-notes">
       <div class="player-video-col">
         <div class="video-with-versions">
@@ -2033,7 +2033,7 @@ function renderVersionsPanel(){
   const hdr=document.getElementById("pvHeader");
   if(hdr)hdr.textContent="Versions";
   const shotLabel=document.getElementById("playerShotLabel");
-  if(shotLabel)shotLabel.textContent=_gifCurrentId.replace(/_/g,' ');
+  if(shotLabel)shotLabel.textContent=_gifCurrentId;
   const versions=state[_gifCurrentId]?.versions||[];
   const origNotes=state[_gifCurrentId]?.playerNotes?.length||0;
   let html=`<div class="pv-item${_gifVersionIdx<0?' active':''}" onclick="switchVersion(-1)" title="Original source">`;
