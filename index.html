@@ -1859,9 +1859,18 @@ function deleteMsg(mid){
   const msgs=getChat(noteTaskId);
   const m=msgs.find(x=>x.id===mid);
   if(!m)return;
+  // If already soft-deleted and admin clicks again — permanent delete
+  if(m.deleted&&isAdmin()){
+    const idx=msgs.indexOf(m);
+    if(idx>=0)msgs.splice(idx,1);
+    saveState(state);
+    renderChat();
+    render();
+    return;
+  }
   const isOwn=(isArtist()&&m.author==="artist")||(isClient()&&m.author==="client");
   if(isAdmin()||isOwn){
-    m.deletedText=m.text; // preserve for admin restore
+    m.deletedText=m.text;
     m.deleted=true;m.text="";
     saveState(state);
     renderChat();
