@@ -394,7 +394,7 @@
       <div class="player-video-col">
         <div class="video-with-versions">
           <div class="player-versions-panel" id="playerVersionsPanel">
-            <div class="pv-header">Versions</div>
+            <div class="pv-header" id="pvHeader">Versions</div>
             <div class="pv-list" id="pvList"></div>
           </div>
           <div class="video-col-inner">
@@ -2029,6 +2029,8 @@ function _playVersion(id,idx){
 function renderVersionsPanel(){
   const list=document.getElementById("pvList");
   if(!list||!_gifCurrentId)return;
+  const hdr=document.getElementById("pvHeader");
+  if(hdr)hdr.textContent=_gifCurrentId.replace(/_/g,' ');
   const versions=state[_gifCurrentId]?.versions||[];
   const origNotes=state[_gifCurrentId]?.playerNotes?.length||0;
   let html=`<div class="pv-item${_gifVersionIdx<0?' active':''}" onclick="switchVersion(-1)" title="Original source">`;
