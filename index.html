@@ -1351,7 +1351,7 @@ function _saveDrawings(){
 
 function _loadDrawingsForFrame(){
   _drawStrokes=[];
-  if(!_gifCurrentId||!state[_gifCurrentId]?.drawings)return;
+  if(!_gifCurrentId||_gifVersionIdx>=0||!state[_gifCurrentId]?.drawings)return;
   const allDrawings=state[_gifCurrentId].drawings;
   // Migrate: if array (old format), convert to frame 0
   if(Array.isArray(allDrawings)){
@@ -1380,7 +1380,7 @@ function _updateMarkers(){
   const vid=_vid();
   const total=_totalFrames();
   if(!total)return;
-  const allDrawings=state[_gifCurrentId]?.drawings||{};
+  const allDrawings=_gifVersionIdx>=0?{}:(state[_gifCurrentId]?.drawings||{});
   container.innerHTML="";
   for(const frame of Object.keys(allDrawings)){
     if(!allDrawings[frame]?.length)continue;
