@@ -301,17 +301,15 @@
   .status-select.s-skip { border-color: #484f58; color: #484f58; }
   .assign-nikita { border-color: #58a6ff; color: #58a6ff; }
   .assign-igor { border-color: #3fb950; color: #3fb950; }
-  .note-cell { cursor: pointer; padding: 6px 8px; border-radius: 6px; font-size: 11px; min-width: 180px; max-width: 300px; background: #0d1117; border: 1px solid #21262d; border-left: 3px solid #58a6ff; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; box-sizing: border-box; }
-  .note-cell:hover { border-color: #30363d; border-left-color: #58a6ff; }
-  .note-cell.has-text .chat-preview-fade { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); }
-  .chat-preview-fade { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-height: 60px; }
-  .chat-preview-line { display: flex; gap: 4px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
-  .chat-preview-line .cp-author { font-size: 10px; font-weight: 600; flex-shrink: 0; }
-  .chat-preview-line .cp-author.r-admin { color: #f85149; }
-  .chat-preview-line .cp-author.r-client { color: #d29922; }
-  .chat-preview-line .cp-author.r-artist { color: #58a6ff; }
-  .chat-preview-line .cp-author.r-note { color: #3fb950; }
-  .chat-preview-line .cp-text { color: #8b949e; overflow: hidden; text-overflow: ellipsis; }
+  .note-cell { cursor: pointer; padding: 4px; border-radius: 6px; font-size: 9px; min-width: 180px; max-width: 300px; background: #0d1117; border: 1px solid #21262d; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; box-sizing: border-box; }
+  .note-cell:hover { border-color: #30363d; }
+  .note-cell.has-text .chat-preview-fade { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 35%); mask-image: linear-gradient(to bottom, transparent 0%, #000 35%); }
+  .chat-preview-fade { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; height: 100%; min-height: 80px; }
+  .cp-bubble { padding: 2px 5px; border-radius: 4px; max-width: 85%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+  .cp-bubble.cp-admin { background: rgba(248,81,73,0.15); color: #f85149; margin-left: auto; border-bottom-right-radius: 1px; }
+  .cp-bubble.cp-client { background: rgba(210,153,34,0.15); color: #d29922; margin-left: auto; border-bottom-right-radius: 1px; }
+  .cp-bubble.cp-artist { background: rgba(88,166,255,0.1); color: #8b949e; margin-right: auto; border-bottom-left-radius: 1px; }
+  .cp-bubble.cp-note { background: rgba(63,185,80,0.1); border-left: 2px solid #3fb950; color: #8b949e; margin-right: auto; border-bottom-left-radius: 1px; }
 
   /* Fullscreen note overlay */
   .note-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: stretch; justify-content: center; padding: 40px; }
@@ -2952,7 +2950,7 @@ function render(){
       if(cells[7]){const sel=cells[7].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
       if(cells[8]){const sel=cells[8].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
       if(cells[9]&&!cells[9].querySelector('.desc-edit-ta'))cells[9].innerHTML=an||'<span style="color:#484f58">...</span>';
-      if(cells[10])cells[10].innerHTML=`<div class="note-cell${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="chat-preview-line"><span class="cp-author r-${l.role}">${l.author}</span><span class="cp-text">${esc(l.text)}</span></div>`).join(''):'<span style="color:#484f58">...</span>'}</div></div>`;
+      if(cells[10])cells[10].innerHTML=`<div class="note-cell${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="cp-bubble cp-${l.role}">${esc(l.text)}</div>`).join(''):'<span style="color:#484f58;font-size:11px">...</span>'}</div></div>`;
     });
   }
   updateStats();
@@ -2983,7 +2981,7 @@ function _buildRow(r){
       <option value="review" ${st==="review"?"selected":""}>Review</option><option value="done" ${st==="done"?"selected":""}>Done</option>
       <option value="skip" ${st==="skip"?"selected":""}>Skip</option></select></td>
     <td class="desc-cell admin-col${canEditAdminNote()?' editable':''}" ${canEditAdminNote()?`onclick="startEditAdmin('${r.id}',this,event)"`:''} data-tid="${r.id}">${an||'<span style="color:#484f58">...</span>'}</td>
-    <td style="vertical-align:top;padding-top:32px"><div class="note-cell${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="chat-preview-line"><span class="cp-author r-${l.role}">${l.author}</span><span class="cp-text">${esc(l.text)}</span></div>`).join(''):'<span style="color:#484f58">...</span>'}</div></div></td>
+    <td style="vertical-align:top;padding-top:32px"><div class="note-cell${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="cp-bubble cp-${l.role}">${esc(l.text)}</div>`).join(''):'<span style="color:#484f58;font-size:11px">...</span>'}</div></div></td>
   </tr>`;
 }
 
