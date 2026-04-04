@@ -303,7 +303,9 @@
   .assign-igor { border-color: #3fb950; color: #3fb950; }
   .note-cell { cursor: pointer; padding: 4px; border-radius: 6px; font-size: 9px; min-width: 180px; max-width: 300px; background: #0d1117; border: 1px solid #21262d; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; box-sizing: border-box; }
   .note-cell:hover { border-color: #30363d; }
-  .note-cell.has-text .chat-preview-fade { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 35%); mask-image: linear-gradient(to bottom, transparent 0%, #000 35%); }
+  .note-cell.has-text .chat-preview-fade { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 60%); mask-image: linear-gradient(to bottom, transparent 0%, #000 60%); }
+  .note-cell.unread { border-left: 3px solid #d29922; }
+  .note-cell.read { border-left: 3px solid #30363d; }
   .chat-preview-fade { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; height: 100%; min-height: 80px; }
   .cp-bubble { padding: 2px 5px; border-radius: 4px; max-width: 85%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
   .cp-bubble.cp-admin { background: rgba(248,81,73,0.15); color: #f85149; margin-left: auto; border-bottom-right-radius: 1px; }
@@ -1581,6 +1583,26 @@ function saveShotInfoModal(id){
   render();
 }
 function nextMsgId(tid){const msgs=getChat(tid);return msgs.length?Math.max(...msgs.map(m=>m.id||0))+1:1;}
+function _getLastMsgTs(id){
+  const chat=getChat(id).filter(m=>!m.deleted);
+  const pn=_collectPlayerNotes(id);
+  const all=[...chat,...pn];
+  if(!all.length)return 0;
+  return Math.max(...all.map(m=>m.ts||0));
+}
+function _getReadTs(id){
+  if(!currentUser)return 0;
+  return state.__readState?.[currentUser.id]?.[id]||0;
+}
+function _markRead(id){
+  if(!currentUser)return;
+  if(!state.__readState)state.__readState={};
+  if(!state.__readState[currentUser.id])state.__readState[currentUser.id]={};
+  state.__readState[currentUser.id][id]=Date.now();
+  saveState(state);
+  render();
+}
+function hasUnread(id){return _getLastMsgTs(id)>_getReadTs(id);}
 function chatPreview(id){
   const chatMsgs=getChat(id).filter(m=>!m.deleted).map(m=>({...m,_pn:false}));
   const pn=_collectPlayerNotes(id).map(n=>({...n,_pn:true}));
@@ -1605,7 +1627,7 @@ function openNote(taskId,type){
   const task=TASKS.find(t=>t.id===taskId);
   const badge=document.getElementById("noteTypeBadge"),title=document.getElementById("notePanelTitle");
   if(type==="admin"){title.textContent="Admin Note";badge.textContent="ADMIN";badge.className="note-type-badge admin-badge";}
-  else{title.textContent="Chat";badge.textContent="CHAT";badge.className="note-type-badge artist-badge";}
+  else{title.textContent="Chat";badge.textContent="CHAT";badge.className="note-type-badge artist-badge";_markRead(taskId);}
   document.getElementById("noteShotId").textContent=taskId;
   document.getElementById("noteShotDesc").textContent=task?"— "+task.desc:"";
   const body=document.getElementById("notePanelBody"),footer=document.getElementById("notePanelFooter");
@@ -2981,7 +3003,7 @@ function _buildRow(r){
       <option value="review" ${st==="review"?"selected":""}>Review</option><option value="done" ${st==="done"?"selected":""}>Done</option>
       <option value="skip" ${st==="skip"?"selected":""}>Skip</option></select></td>
     <td class="desc-cell admin-col${canEditAdminNote()?' editable':''}" ${canEditAdminNote()?`onclick="startEditAdmin('${r.id}',this,event)"`:''} data-tid="${r.id}">${an||'<span style="color:#484f58">...</span>'}</td>
-    <td style="vertical-align:top;padding-top:32px"><div class="note-cell${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="cp-bubble cp-${l.role}">${esc(l.text)}</div>`).join(''):'<span style="color:#484f58;font-size:11px">...</span>'}</div></div></td>
+    <td style="vertical-align:top;padding-top:32px"><div class="note-cell${cp.text?' has-text':''}${cp.lines.length?(hasUnread(r.id)?' unread':' read'):''}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="cp-bubble cp-${l.role}">${esc(l.text)}</div>`).join(''):'<span style="color:#484f58;font-size:11px">...</span>'}</div></div></td>
   </tr>`;
 }
 
