@@ -441,7 +441,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.8</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.9</div>
 
 <script>
 const USERS = {
@@ -989,7 +989,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
-let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=24;
+let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=24, _gifVersionIdx=-1;
 const TOOL_ICONS={pen:'✏️',triangle:'△',rect:'▭',circle:'○',arrow:'→'};
 let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null, _drawTool="pen", _shapeStart=null;
 
@@ -998,6 +998,7 @@ function _vid(){return document.getElementById("gifVideo");}
 function openGif(id){
   _cleanupGif();
   _gifCurrentId=id;
+  _gifVersionIdx=-1;
   _drawMode=false;
   document.getElementById("drawToggle").classList.remove("active");
   const vid=_vid();
@@ -1049,7 +1050,7 @@ function openGif(id){
 }
 
 function closeGif(){
-  _compileNotesToDesc();
+  if(_gifVersionIdx<0)_compileNotesToDesc(); else saveState(state);
   _cleanupGif();
   document.getElementById("gifOverlay").classList.add("hidden");
   render();
@@ -1389,9 +1390,21 @@ function _updateMarkers(){
 }
 
 // --- PLAYER NOTES ---
+function _getNotesStore(){
+  // Returns the array reference for current context (original or version)
+  if(!_gifCurrentId)return null;
+  if(_gifVersionIdx>=0){
+    const v=(state[_gifCurrentId]?.versions||[])[_gifVersionIdx];
+    if(!v)return null;
+    if(!v.notes)v.notes=[];
+    return v.notes;
+  }
+  if(!state[_gifCurrentId])state[_gifCurrentId]={};
+  if(!state[_gifCurrentId].playerNotes)state[_gifCurrentId].playerNotes=[];
+  return state[_gifCurrentId].playerNotes;
+}
 function _getPlayerNotes(){
-  if(!_gifCurrentId)return[];
-  return state[_gifCurrentId]?.playerNotes||[];
+  return _getNotesStore()||[];
 }
 function _nextPnId(){
   const notes=_getPlayerNotes();
@@ -1403,6 +1416,8 @@ function renderPlayerNotes(){
   if(!list)return;
   const notes=_getPlayerNotes();
   count.textContent=notes.length||"";
+  const title=document.querySelector(".pn-header-title");
+  if(title)title.textContent=_gifVersionIdx>=0?"Version "+((_gifVersionIdx)+1)+" Notes":"Notes";
   if(!notes.length){list.innerHTML='<div class="pn-empty">No notes yet. Draw or type to add.</div>';return;}
   list.innerHTML=notes.map(n=>{
     const tcHtml=n.tc?`<span class="pn-tc" onclick="seekToNoteFrame(${n.frame})">${n.tc}</span>`:'';
@@ -1421,10 +1436,10 @@ function _canNote(){return !isGuest();}
 function addPlayerNote(){
   const ta=document.getElementById("pnInputTA");
   if(!_canNote()||!ta||!ta.value.trim()||!_gifCurrentId)return;
-  if(!state[_gifCurrentId])state[_gifCurrentId]={};
-  if(!state[_gifCurrentId].playerNotes)state[_gifCurrentId].playerNotes=[];
+  const store=_getNotesStore();
+  if(!store)return;
   const f=_currentFrame();
-  state[_gifCurrentId].playerNotes.push({
+  store.push({
     id:_nextPnId(),
     author:(currentUser&&currentUser.display)||'Guest',
     ts:Date.now(),
@@ -1439,10 +1454,10 @@ function addPlayerNote(){
 }
 function addDrawingNote(tool,color){
   if(!_canNote()||!_gifCurrentId)return;
-  if(!state[_gifCurrentId])state[_gifCurrentId]={};
-  if(!state[_gifCurrentId].playerNotes)state[_gifCurrentId].playerNotes=[];
+  const store=_getNotesStore();
+  if(!store)return;
   const f=_currentFrame();
-  state[_gifCurrentId].playerNotes.push({
+  store.push({
     id:_nextPnId(),
     author:(currentUser&&currentUser.display)||'Guest',
     ts:Date.now(),
@@ -1471,22 +1486,22 @@ function editPlayerNote(nid,el){
 }
 function savePlayerNoteText(nid,text){
   if(!_gifCurrentId)return;
-  const notes=state[_gifCurrentId]?.playerNotes;
-  if(!notes)return;
-  const note=notes.find(n=>n.id===nid);
+  const store=_getNotesStore();
+  if(!store)return;
+  const note=store.find(n=>n.id===nid);
   if(!note)return;
   note.text=text;
-  _compileNotesToDesc();
+  if(_gifVersionIdx<0)_compileNotesToDesc(); else saveState(state);
   renderPlayerNotes();
 }
 function deletePlayerNote(nid){
-  if(!_gifCurrentId||!state[_gifCurrentId]?.playerNotes)return;
-  const note=state[_gifCurrentId].playerNotes.find(n=>n.id===nid);
+  const store=_getNotesStore();
+  if(!_gifCurrentId||!store)return;
+  const note=store.find(n=>n.id===nid);
   if(note&&note.drawing){
     const drawings=state[_gifCurrentId].drawings;
     if(drawings&&drawings[note.frame]){
       const arr=drawings[note.frame];
-      // Remove last matching stroke (same tool+color) on that frame
       for(let i=arr.length-1;i>=0;i--){
         if(arr[i].t===note.drawing.tool&&arr[i].c===note.drawing.color){
           arr.splice(i,1);break;
@@ -1498,8 +1513,9 @@ function deletePlayerNote(nid){
     _redrawAll();
     _updateMarkers();
   }
-  state[_gifCurrentId].playerNotes=state[_gifCurrentId].playerNotes.filter(n=>n.id!==nid);
-  _compileNotesToDesc();
+  const idx=store.findIndex(n=>n.id===nid);
+  if(idx>=0)store.splice(idx,1);
+  if(_gifVersionIdx<0)_compileNotesToDesc(); else saveState(state);
   renderPlayerNotes();
 }
 function seekToNoteFrame(frame){
@@ -1645,8 +1661,9 @@ function _playVersion(id,idx){
   const v=(state[id]?.versions||[])[idx];
   if(!v)return;
   const vid=document.getElementById("gifVideo");
-  _cleanupGif();_gifCurrentId=id;
+  _cleanupGif();_gifCurrentId=id;_gifVersionIdx=idx;
   document.getElementById("gifOverlay").classList.remove("hidden");
+  renderPlayerNotes();
   vid.src=v.url;vid.load();
   vid.addEventListener("loadedmetadata",()=>{
     const scrub=document.getElementById("gifScrubber");
