@@ -431,7 +431,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.5</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.6</div>
 
 <script>
 const USERS = {
@@ -1577,8 +1577,9 @@ function _renderShotBody(id){
     </div>`;
   }
   versions.forEach((v,i)=>{
+    const thumbHtml=v.thumb?`<img src="${v.thumb}" alt="V${i+1}" style="width:320px;height:auto">`:`<div class="version-thumb"><span class="version-num">V${i+1}</span></div>`;
     html+=`<div class="shot-media-card" onclick="closeShot();_playVersion('${id}',${i})">
-      <div class="version-thumb"><span class="version-num">V${i+1}</span></div>
+      ${thumbHtml}
       <div class="shot-media-label"><span class="play-icon">▶</span> ${esc(v.name||'Version '+(i+1))}<button class="ver-del" onclick="event.stopPropagation();deleteVersion('${id}',${i})" title="Delete">&times;</button></div>
     </div>`;
   });
@@ -1703,7 +1704,9 @@ async function uploadVersion(shotId,input){
   if(ok){
     if(!state[shotId])state[shotId]={};
     if(!state[shotId].versions)state[shotId].versions=[];
-    state[shotId].versions.push({name:file.name,url:CDN_BASE+"/"+key,ts:ts});
+    const thumbKey="versions/"+shotId+"/thumb_"+ts+".jpg";
+    const thumbUrl=await _generateThumbnail(CDN_BASE+"/"+key,thumbKey);
+    state[shotId].versions.push({name:file.name,url:CDN_BASE+"/"+key,thumb:thumbUrl||null,ts:ts});
     saveState(state);
     _uploads[shotId].done=true;
   } else {
@@ -1711,6 +1714,33 @@ async function uploadVersion(shotId,input){
   }
   delete _uploads[shotId];
   if(_shotCurrentId===shotId)_renderShotBody(shotId);
+}
+
+async function _generateThumbnail(videoUrl,thumbKey){
+  return new Promise((resolve)=>{
+    const vid=document.createElement("video");
+    vid.crossOrigin="anonymous";
+    vid.muted=true;vid.preload="auto";
+    vid.addEventListener("loadeddata",()=>{
+      vid.currentTime=0.1;
+    });
+    vid.addEventListener("seeked",()=>{
+      try{
+        const cv=document.createElement("canvas");
+        cv.width=vid.videoWidth;cv.height=vid.videoHeight;
+        cv.getContext("2d").drawImage(vid,0,0);
+        cv.toBlob(async(blob)=>{
+          if(!blob){resolve(null);return;}
+          const ok=await r2UploadXHR(thumbKey,blob);
+          vid.remove();
+          resolve(ok?CDN_BASE+"/"+thumbKey:null);
+        },"image/jpeg",0.8);
+      }catch(e){vid.remove();resolve(null);}
+    },{once:true});
+    vid.addEventListener("error",()=>{vid.remove();resolve(null);});
+    vid.src=videoUrl;
+    setTimeout(()=>{vid.remove();resolve(null);},15000);
+  });
 }
 
 // --- RENDER TABLE ---
