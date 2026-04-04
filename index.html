@@ -108,9 +108,20 @@
   .gif-overlay.hidden { display: none; }
   .gif-player-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .player-with-notes { display: flex; align-items: stretch; gap: 16px; max-width: 95vw; max-height: 90vh; }
+  .video-with-versions { display: flex; align-items: stretch; gap: 10px; }
+  .player-versions-panel { width: 160px; min-width: 140px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .pv-header { padding: 8px 10px; border-bottom: 1px solid #30363d; color: #8b949e; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .pv-list { flex: 1; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+  .pv-list::-webkit-scrollbar { width: 4px; } .pv-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+  .pv-item { padding: 7px 8px; border-radius: 5px; cursor: pointer; font-size: 12px; color: #8b949e; display: flex; align-items: center; gap: 6px; transition: background .15s; border: 1px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pv-item:hover { background: #21262d; color: #c9d1d9; }
+  .pv-item.active { background: #1f6feb22; border-color: #1f6feb; color: #58a6ff; }
+  .pv-item .pv-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .pv-item .pv-label { overflow: hidden; text-overflow: ellipsis; }
+  .pv-item .pv-notes-badge { margin-left: auto; font-size: 10px; color: #484f58; flex-shrink: 0; }
   .player-video-col { display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-  .video-wrap { position: relative; display: inline-block; }
-  .video-wrap video { max-width: calc(95vw - 360px); max-height: 75vh; border-radius: 8px; display: block; cursor: pointer; }
+  .video-wrap { position: relative; width: calc(95vw - 540px); height: 75vh; background: #000; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .video-wrap video { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; display: block; cursor: pointer; }
   .player-notes-panel { width: 320px; min-width: 280px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
   .pn-header { padding: 10px 14px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
   .pn-header-title { color: #c9d1d9; font-size: 14px; font-weight: 600; }
@@ -140,18 +151,22 @@
   .pn-empty { color: #484f58; font-size: 13px; text-align: center; padding: 20px; }
   @media (max-width: 900px) {
     .player-with-notes { flex-direction: column; align-items: center; }
+    .player-versions-panel { width: 100%; max-width: 600px; flex-direction: row; max-height: none; overflow-x: auto; }
+    .pv-list { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
     .player-notes-panel { width: 100%; max-width: 600px; max-height: 35vh; }
-    .video-wrap video { max-width: 90vw; }
+    .video-wrap { width: 90vw; height: 50vh; }
   }
-  .video-wrap canvas { max-width: 90vw; max-height: 75vh; }
+  .video-wrap canvas { pointer-events: auto; }
   .gif-controls { display: flex; align-items: center; gap: 12px; }
   .gif-ctrl-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
   .gif-ctrl-btn:hover { background: rgba(255,255,255,0.2); }
   .scrubber-wrap { position: relative; width: 300px; max-width: 60vw; height: 20px; display: flex; align-items: center; }
   .gif-scrubber { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none; cursor: pointer; position: relative; z-index: 1; }
   .gif-scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; }
-  .scrubber-markers { position: absolute; top: 0; left: 0; right: 0; height: 100%; pointer-events: none; z-index: 0; }
-  .scrubber-marker { position: absolute; top: 0; width: 2px; height: 100%; background: #f85149; transform: translateX(-50%); opacity: 0.8; }
+  .scrubber-markers { position: absolute; top: -6px; left: 0; right: 0; bottom: -6px; pointer-events: none; z-index: 2; }
+  .scrubber-marker { position: absolute; top: 0; bottom: 0; width: 12px; background: transparent; transform: translateX(-50%); cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; }
+  .scrubber-marker::before { content: ''; width: 2px; height: 60%; background: #f85149; border-radius: 1px; transition: width .15s, height .15s, box-shadow .15s; }
+  .scrubber-marker:hover::before { width: 4px; height: 100%; box-shadow: 0 0 6px #f85149; }
   .gif-frame-label { color: #8b949e; font-size: 12px; font-family: 'SF Mono', monospace; min-width: 160px; text-align: center; }
   .gif-close-btn { position: absolute; top: 20px; right: 24px; background: none; border: none; color: #8b949e; font-size: 32px; cursor: pointer; line-height: 1; z-index: 10; }
   .gif-close-btn:hover { color: #fff; }
@@ -341,8 +356,14 @@
           <button class="draw-btn" onclick="undoDraw()">&#8617; Undo</button>
           <button class="draw-btn" onclick="clearDraw()">&#10005; Clear</button>
         </div>
-        <div class="video-wrap" id="videoWrap">
-          <video id="gifVideo" loop muted playsinline onclick="toggleGifPause()"></video>
+        <div class="video-with-versions">
+          <div class="player-versions-panel" id="playerVersionsPanel">
+            <div class="pv-header">Versions</div>
+            <div class="pv-list" id="pvList"></div>
+          </div>
+          <div class="video-wrap" id="videoWrap">
+            <video id="gifVideo" loop muted playsinline onclick="toggleGifPause()"></video>
+          </div>
         </div>
         <div class="gif-controls">
           <button class="gif-ctrl-btn" onclick="stepFrame(-1)" title="Previous frame">&lt;|</button>
@@ -1004,6 +1025,7 @@ function openGif(id){
   const vid=_vid();
   document.getElementById("gifOverlay").classList.remove("hidden");
   renderPlayerNotes();
+  renderVersionsPanel();
 
   let _lastFrame=-1;
   let _readyCalled=false;
@@ -1143,6 +1165,17 @@ document.getElementById("gifVideo").addEventListener("seeked",function(){
 });
 
 // --- DRAWING ---
+function _getVideoRect(){
+  // Compute the actual rendered video area inside the object-fit:contain container
+  const vid=_vid();
+  if(!vid||!vid.videoWidth||!vid.videoHeight)return null;
+  const cw=vid.offsetWidth, ch=vid.offsetHeight;
+  const vw=vid.videoWidth, vh=vid.videoHeight;
+  const scale=Math.min(cw/vw, ch/vh);
+  const rw=vw*scale, rh=vh*scale;
+  const ox=(cw-rw)/2, oy=(ch-rh)/2;
+  return {left:ox, top:oy, width:rw, height:rh};
+}
 function _initDrawCanvas(){
   const wrap=document.getElementById("videoWrap");
   const vid=_vid();
@@ -1153,9 +1186,18 @@ function _initDrawCanvas(){
   cv.id="drawCanvas";
   cv.width=vid.videoWidth||vid.offsetWidth;
   cv.height=vid.videoHeight||vid.offsetHeight;
-  const rect=vid.getBoundingClientRect();
-  cv.style.width=rect.width+"px";
-  cv.style.height=rect.height+"px";
+  const vr=_getVideoRect();
+  if(vr){
+    cv.style.position="absolute";
+    cv.style.left=vr.left+"px";
+    cv.style.top=vr.top+"px";
+    cv.style.width=vr.width+"px";
+    cv.style.height=vr.height+"px";
+  } else {
+    const rect=vid.getBoundingClientRect();
+    cv.style.width=rect.width+"px";
+    cv.style.height=rect.height+"px";
+  }
   wrap.appendChild(cv);
   _drawCanvas=cv;_drawCtx=cv.getContext("2d");
   // Mouse events
@@ -1328,11 +1370,21 @@ function _currentFrame(){
   return Math.round(vid.currentTime*_videoFPS);
 }
 
-function _saveDrawings(){
-  if(!_gifCurrentId)return;
+function _getDrawingsStore(){
+  if(!_gifCurrentId)return null;
+  if(_gifVersionIdx>=0){
+    const v=(state[_gifCurrentId]?.versions||[])[_gifVersionIdx];
+    if(!v)return null;
+    if(!v.drawings)v.drawings={};
+    return v.drawings;
+  }
   if(!state[_gifCurrentId])state[_gifCurrentId]={};
-  // Get all frame drawings
-  const allDrawings=state[_gifCurrentId].drawings||{};
+  if(!state[_gifCurrentId].drawings)state[_gifCurrentId].drawings={};
+  return state[_gifCurrentId].drawings;
+}
+function _saveDrawings(){
+  const allDrawings=_getDrawingsStore();
+  if(!allDrawings)return;
   const frame=_currentFrame();
   if(_drawStrokes.length){
     allDrawings[frame]=_drawStrokes.map(s=>{
@@ -1344,17 +1396,16 @@ function _saveDrawings(){
   } else {
     delete allDrawings[frame];
   }
-  state[_gifCurrentId].drawings=allDrawings;
   saveState(state);
   _updateMarkers();
 }
 
 function _loadDrawingsForFrame(){
   _drawStrokes=[];
-  if(!_gifCurrentId||_gifVersionIdx>=0||!state[_gifCurrentId]?.drawings)return;
-  const allDrawings=state[_gifCurrentId].drawings;
+  const allDrawings=_getDrawingsStore();
+  if(!allDrawings)return;
   // Migrate: if array (old format), convert to frame 0
-  if(Array.isArray(allDrawings)){
+  if(_gifVersionIdx<0&&Array.isArray(allDrawings)){
     state[_gifCurrentId].drawings={"0":allDrawings};
     return _loadDrawingsForFrame();
   }
@@ -1376,16 +1427,21 @@ function _switchFrame(){
 
 function _updateMarkers(){
   const container=document.getElementById("scrubberMarkers");
-  if(!container)return;
-  const vid=_vid();
+  if(!container||!_gifCurrentId)return;
   const total=_totalFrames();
   if(!total)return;
-  const allDrawings=_gifVersionIdx>=0?{}:(state[_gifCurrentId]?.drawings||{});
   container.innerHTML="";
-  for(const frame of Object.keys(allDrawings)){
-    if(!allDrawings[frame]?.length)continue;
-    const pct=(parseInt(frame)/(total-1))*100;
-    container.innerHTML+=`<div class="scrubber-marker" style="left:${pct}%"></div>`;
+  const frames=new Set();
+  const notes=_getPlayerNotes();
+  for(const n of notes){
+    if(n.frame!=null)frames.add(n.frame);
+  }
+  const scrub=document.getElementById("gifScrubber");
+  const maxVal=parseFloat(scrub.max)||1;
+  for(const frame of frames){
+    const val=Math.round(frame/_videoFPS*1000);
+    const frac=val/maxVal;
+    container.innerHTML+=`<div class="scrubber-marker" style="left:calc(8px + (100% - 16px) * ${frac})" onclick="seekToNoteFrame(${frame})" title="Frame ${frame}"></div>`;
   }
 }
 
@@ -1431,6 +1487,25 @@ function renderPlayerNotes(){
   list.scrollTop=list.scrollHeight;
   const inp=document.getElementById("pnInputWrap");
   if(inp)inp.style.display=_canNote()?'':'none';
+  _updateVersionBadges();
+  _updateMarkers();
+}
+function _updateVersionBadges(){
+  const list=document.getElementById("pvList");
+  if(!list||!_gifCurrentId)return;
+  const items=list.querySelectorAll(".pv-item");
+  if(!items.length)return;
+  // item 0 = source, rest = versions
+  const origN=state[_gifCurrentId]?.playerNotes?.length||0;
+  const b0=items[0]?.querySelector(".pv-notes-badge");
+  if(b0)b0.textContent=origN||''; else if(origN){const s=document.createElement('span');s.className='pv-notes-badge';s.textContent=origN;items[0].appendChild(s);}
+  const versions=state[_gifCurrentId]?.versions||[];
+  for(let i=0;i<versions.length;i++){
+    const n=versions[i].notes?.length||0;
+    const item=items[i+1];if(!item)continue;
+    const b=item.querySelector(".pv-notes-badge");
+    if(b)b.textContent=n||''; else if(n){const s=document.createElement('span');s.className='pv-notes-badge';s.textContent=n;item.appendChild(s);}
+  }
 }
 function _canNote(){return !isGuest();}
 function addPlayerNote(){
@@ -1664,13 +1739,68 @@ function _playVersion(id,idx){
   _cleanupGif();_gifCurrentId=id;_gifVersionIdx=idx;
   document.getElementById("gifOverlay").classList.remove("hidden");
   renderPlayerNotes();
+  renderVersionsPanel();
   vid.src=v.url;vid.load();
   vid.addEventListener("loadedmetadata",()=>{
     const scrub=document.getElementById("gifScrubber");
     scrub.max=Math.round(vid.duration*1000);scrub.value=0;
+    _initDrawCanvas();
+    _updateMarkers();
     vid.play();_gifPaused=false;
     document.getElementById("gifPlayBtn").textContent="❚❚";
   },{once:true});
+}
+
+function renderVersionsPanel(){
+  const list=document.getElementById("pvList");
+  if(!list||!_gifCurrentId)return;
+  const versions=state[_gifCurrentId]?.versions||[];
+  const origNotes=state[_gifCurrentId]?.playerNotes?.length||0;
+  let html=`<div class="pv-item${_gifVersionIdx<0?' active':''}" onclick="switchVersion(-1)" title="Original source">`;
+  html+=`<span class="pv-dot" style="background:#3fb950"></span>`;
+  html+=`<span class="pv-label">Source</span>`;
+  if(origNotes)html+=`<span class="pv-notes-badge">${origNotes}</span>`;
+  html+=`</div>`;
+  versions.forEach((v,i)=>{
+    const n=v.notes?.length||0;
+    const name=v.name||('Version '+(i+1));
+    const short=name.length>14?name.substring(0,12)+'…':name;
+    html+=`<div class="pv-item${_gifVersionIdx===i?' active':''}" onclick="switchVersion(${i})" title="${esc(name)}">`;
+    html+=`<span class="pv-dot" style="background:#58a6ff"></span>`;
+    html+=`<span class="pv-label">${esc(short)}</span>`;
+    if(n)html+=`<span class="pv-notes-badge">${n}</span>`;
+    html+=`</div>`;
+  });
+  list.innerHTML=html;
+}
+
+function switchVersion(idx){
+  if(!_gifCurrentId)return;
+  if(idx===_gifVersionIdx)return;
+  if(_gifVersionIdx<0)_compileNotesToDesc(); else saveState(state);
+  const vid=_vid();
+  _gifVersionIdx=idx;
+  if(idx<0){
+    vid.src=CDN_BASE+"/video/"+_gifCurrentId+".mp4";
+  } else {
+    const v=(state[_gifCurrentId]?.versions||[])[idx];
+    if(!v)return;
+    vid.src=v.url;
+  }
+  vid.load();
+  _gifPaused=true;
+  document.getElementById("gifPlayBtn").textContent="▶";
+  vid.addEventListener("loadedmetadata",()=>{
+    const scrub=document.getElementById("gifScrubber");
+    scrub.max=Math.round(vid.duration*1000);scrub.value=0;
+    _updateFrameLabel(0);
+    _initDrawCanvas();
+    _loadDrawingsForFrame();
+    _redrawAll();
+    _updateMarkers();
+  },{once:true});
+  renderPlayerNotes();
+  renderVersionsPanel();
 }
 function _showConfirm(title,msg){
   return new Promise((resolve)=>{
