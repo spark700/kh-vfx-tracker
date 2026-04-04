@@ -240,11 +240,12 @@
   .shot-info-cell { font-size: 10px; color: #8b949e; line-height: 1.3; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
   .shot-info-cell:hover { color: #58a6ff; }
   .si-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: flex; align-items: center; justify-content: center; }
-  .si-modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 420px; max-width: 90vw; }
+  .si-modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 420px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; }
   .si-modal-header { padding: 14px 18px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
   .si-modal-header h3 { margin: 0; color: #c9d1d9; font-size: 15px; }
   .si-modal-close { background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; }
-  .si-modal-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .si-modal-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
+  .si-modal-body::-webkit-scrollbar { width: 4px; } .si-modal-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
   .si-modal-row { display: flex; align-items: center; gap: 10px; }
   .si-modal-row .si-m-label { width: 90px; font-size: 11px; color: #8b949e; text-transform: uppercase; flex-shrink: 0; }
   .si-modal-row .si-m-val { color: #c9d1d9; font-size: 13px; flex: 1; }
@@ -1203,6 +1204,112 @@ const SI_OPTIONS={
     // ACES
     "ACEScct","ACEScc",
   ],
+  fps:[
+    "23.976","24","25","29.97","30","48","50","59.94","60","90","100","120","150","180","200","240","300","500","1000",
+    "23.976 (film)","24 (cinema)","25 (PAL)","29.97 (NTSC)","30 (web)","48 (HFR)","60 (broadcast)","120 (slow-mo)","240 (high-speed)",
+  ],
+  resolution:[
+    "8K DCI 8192×4320","8K UHD 7680×4320","6K 6144×3160","6K 6144×2560",
+    "5K 5120×2700","4.6K 4608×2592","4.5K 4448×3096",
+    "4K DCI 4096×2160","4K UHD 3840×2160","4K Anam 4096×1716","4K 4096×2304",
+    "3.4K ARRIRAW OG 3424×2202","3.2K 3200×1800",
+    "2K DCI 2048×1080","2K 2048×1152","HD 1920×1080","720p 1280×720",
+    "6K 6144×3456","5.7K 5728×3016","5.2K 5184×2160","4.5K LF 4448×3096",
+    "8K 8192×4320","6.5K ALEXA65 6560×3100",
+  ],
+  aspectRatio:[
+    "2.39:1 (Scope)","2.35:1 (Scope legacy)","2.00:1 (Univisium)","1.85:1 (Flat)","1.78:1 (16:9)","1.66:1 (Euro)","1.55:1 (ALEXA OG)","1.50:1 (IMAX)","1.43:1 (IMAX 1.43)","1.37:1 (Academy)","1.33:1 (4:3)","1.20:1 (Polyvision)","1:1 (Square)",
+    "Anam 2x desqueeze → 2.39:1","Anam 2x desqueeze → 2.76:1","Anam 1.5x desqueeze → 2.39:1","Anam 1.33x desqueeze → 2.39:1","Anam 1.33x desqueeze → 2.00:1",
+    "IMAX 1.90:1","IMAX 1.43:1","VistaVision 1.50:1",
+  ],
+  shutterAngle:[
+    "360°","270°","180° (standard)","172.8° (24fps 1/50s)","144°","120°","90°","72°","45°","22.5°","11.25°",
+    "1/24s","1/25s","1/30s","1/48s","1/50s","1/60s","1/96s","1/100s","1/120s","1/125s","1/200s","1/250s","1/500s","1/1000s","1/2000s","1/4000s","1/8000s",
+  ],
+  codec:[
+    // RAW
+    "ARRIRAW","ARRIRAW HDE","ARRIRAW MXF",
+    "R3D (REDCODE)","R3D HQ","R3D MQ","R3D LQ",
+    "Sony X-OCN ST","Sony X-OCN LT","Sony X-OCN XT","Sony RAW",
+    "Canon Cinema RAW Light","Canon Cinema RAW Light HQ","Canon Cinema RAW Light ST","Canon RAW",
+    "Blackmagic RAW (BRAW)","BRAW Q0","BRAW Q1","BRAW Q3","BRAW Q5","BRAW 3:1","BRAW 5:1","BRAW 8:1","BRAW 12:1",
+    "CinemaDNG","CinemaDNG RAW","CinemaDNG lossless",
+    "Nikon N-RAW","Nikon ProRes RAW HQ",
+    // ProRes
+    "Apple ProRes 4444 XQ","Apple ProRes 4444","Apple ProRes 422 HQ","Apple ProRes 422","Apple ProRes 422 LT","Apple ProRes 422 Proxy",
+    "Apple ProRes RAW","Apple ProRes RAW HQ",
+    // H.264 / H.265
+    "H.264 (AVC)","H.264 4:2:0 8-bit","H.264 4:2:2 10-bit","H.265 (HEVC)","H.265 4:2:0 10-bit","H.265 4:2:2 10-bit",
+    // XAVC / XDCAM
+    "XAVC S-I","XAVC HS","XAVC S","XAVC 4K","XDCAM HD422",
+    // MXF
+    "MXF (OP1a)","MXF (OPAtom)",
+    // Image sequences
+    "EXR (OpenEXR)","EXR 16-bit half","EXR 32-bit float","EXR PIZ","EXR DWAA","EXR DWAB","EXR ZIP",
+    "DPX 10-bit log","DPX 16-bit","TIFF 16-bit","TIFF 32-bit float","PNG 16-bit",
+    // Others
+    "DNxHR HQX","DNxHR HQ","DNxHR SQ","DNxHR LB","DNxHD 444","DNxHD 220x","DNxHD 220","DNxHD 145","DNxHD 36",
+    "GoPro CineForm","Panasonic AVC-Intra 4K","Panasonic V-RAW",
+  ],
+  bitDepth:[
+    "8-bit","10-bit","12-bit","14-bit","16-bit integer","16-bit half float","32-bit float",
+    "8-bit 4:2:0","8-bit 4:2:2","10-bit 4:2:0","10-bit 4:2:2","10-bit 4:4:4","12-bit 4:4:4","12-bit RAW","14-bit RAW","16-bit 4:4:4",
+  ],
+  lut:[
+    // ACES IDTs
+    "ACES IDT — ARRI Alexa LogC3","ACES IDT — ARRI Alexa 35 LogC4","ACES IDT — ARRI Alexa Mini LF",
+    "ACES IDT — RED IPP2","ACES IDT — REDWideGamutRGB / Log3G10",
+    "ACES IDT — Sony S-Log3 / S-Gamut3","ACES IDT — Sony S-Log3 / S-Gamut3.Cine","ACES IDT — Sony Venice",
+    "ACES IDT — Canon C-Log3 / Cinema Gamut","ACES IDT — Canon C-Log2 / Cinema Gamut",
+    "ACES IDT — Blackmagic Film Gen 5 / Wide Gamut","ACES IDT — Panasonic V-Log / V-Gamut",
+    // Show LUTs
+    "ARRI LogC3 → Rec.709","ARRI LogC4 → Rec.709","ARRI K1S1 (Alexa classic look)",
+    "REDLog3G10 → Rec.709","RED IPP2 Medium Contrast",
+    "Sony S-Log3 → Rec.709 (s709)","Sony Venice Look",
+    "Canon C-Log3 → Rec.709","Canon C-Log2 → Rec.709",
+    "Blackmagic Film Gen 5 → Rec.709","Blackmagic Extended Video",
+    // Creative
+    "FilmConvert","Dehancer","ACES RRT + sRGB ODT","ACES RRT + Rec.709 ODT","ACES RRT + P3-D65 ODT",
+    "DaVinci Resolve Color Managed","Baselight / Truelight",
+    "No LUT (raw log)","Custom show LUT",
+  ],
+  focalLength:[
+    "8mm","10mm","12mm","14mm","16mm","18mm","20mm","21mm","24mm","25mm","27mm","28mm","29mm","32mm","35mm","40mm","45mm","50mm","55mm","58mm","65mm","75mm","85mm","100mm","105mm","120mm","135mm","150mm","180mm","200mm","250mm","300mm","400mm","500mm","600mm","800mm","1000mm",
+    "Zoom 18-80mm","Zoom 24-290mm","Zoom 28-76mm","Zoom 30-90mm","Zoom 45-250mm","Zoom 70-200mm","Zoom 15-40mm","Zoom 19.5-94mm","Zoom 25-250mm","Zoom 50-1000mm",
+  ],
+  tStop:[
+    "T1.0","T1.3","T1.4","T1.5","T1.8","T2.0","T2.1","T2.2","T2.5","T2.8","T3.2","T3.5","T4.0","T4.5","T5.0","T5.6","T6.3","T7.1","T8.0","T9.0","T10","T11","T13","T16","T22",
+    "f/1.2","f/1.4","f/1.8","f/2.0","f/2.8","f/4.0","f/5.6","f/8.0","f/11","f/16","f/22",
+  ],
+  focusDistance:[
+    "0.3m (1ft)","0.5m (1.5ft)","0.6m (2ft)","0.75m (2.5ft)","0.9m (3ft)","1m (3.3ft)","1.2m (4ft)","1.5m (5ft)","1.8m (6ft)","2m (6.5ft)","2.5m (8ft)","3m (10ft)","3.5m (11.5ft)","4m (13ft)","5m (16ft)","6m (20ft)","7m (23ft)","8m (26ft)","10m (33ft)","12m (40ft)","15m (50ft)","20m (66ft)","30m (100ft)","50m (165ft)","∞ (infinity)",
+  ],
+  filters:[
+    // ND
+    "ND 0.3 (1 stop)","ND 0.6 (2 stops)","ND 0.9 (3 stops)","ND 1.2 (4 stops)","ND 1.5 (5 stops)","ND 1.8 (6 stops)","ND 2.1 (7 stops)","ND 2.4 (8 stops)",
+    "IRND 0.3","IRND 0.6","IRND 0.9","IRND 1.2","IRND 1.5","IRND 1.8","IRND 2.1",
+    "Internal ND 1/4","Internal ND 1/16","Internal ND 1/64",
+    "Variable ND 2-5 stops","Variable ND 6-9 stops",
+    // Diffusion
+    "Black Pro-Mist 1/8","Black Pro-Mist 1/4","Black Pro-Mist 1/2","Black Pro-Mist 1",
+    "White Pro-Mist 1/4","White Pro-Mist 1/2",
+    "Glimmerglass 1/4","Glimmerglass 1/2","Glimmerglass 1",
+    "Classic Soft 1/2","Classic Soft 1",
+    "Hollywood Black Magic 1/4","Hollywood Black Magic 1/2",
+    "Schneider Radiant Soft 1/2","Schneider Radiant Soft 1",
+    "Low Contrast 1/4","Low Contrast 1/2","Low Contrast 1",
+    "Ultra Contrast 1/2","Ultra Contrast 1",
+    // Polarizer
+    "Circular Polarizer","Linear Polarizer",
+    // Color
+    "Warm 81A","Warm 81EF","Cool 82A","85 (tungsten to daylight)","80A (daylight to tungsten)",
+    "Coral 1/4","Coral 1/2","Tobacco 1","Straw 1/4",
+    // Effects
+    "Streak","Star 4pt","Star 6pt","Fog 1/4","Fog 1/2","Fog 1","Double Fog 1/4",
+    "Diopter +1/2","Diopter +1","Diopter +2","Diopter +3",
+    "Clear / Optical flat","UV / Protection",
+    "No filter",
+  ],
 };
 const SI_SENSOR_MODES={
   // ARRI
@@ -1326,11 +1433,20 @@ function openShotInfoModal(id){
   ov.className="si-modal-overlay";ov.id="siModalOverlay";
   ov.onclick=(e)=>{if(e.target===ov)closeShotInfoModal();};
   const fields=[
-    {key:"camera",label:"Camera"},{key:"sensor",label:"Sensor"},{key:"lens",label:"Lens"},
-    {key:"colorSpace",label:"Color Space"},{key:"gamma",label:"Gamma"}
+    {section:"Camera & Optics"},
+    {key:"camera",label:"Camera"},{key:"sensor",label:"Sensor Mode"},{key:"lens",label:"Lens"},
+    {key:"focalLength",label:"Focal Length"},{key:"tStop",label:"T-Stop / f"},{key:"focusDistance",label:"Focus Distance"},{key:"filters",label:"Filters"},
+    {section:"Format"},
+    {key:"resolution",label:"Resolution"},{key:"aspectRatio",label:"Aspect Ratio"},{key:"fps",label:"FPS"},{key:"shutterAngle",label:"Shutter"},
+    {section:"Color Pipeline"},
+    {key:"colorSpace",label:"Color Space"},{key:"gamma",label:"Gamma"},{key:"bitDepth",label:"Bit Depth"},{key:"codec",label:"Codec"},{key:"lut",label:"LUT / IDT"},
   ];
   let body='';
   fields.forEach(f=>{
+    if(f.section){
+      body+=`<div style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin-top:6px;padding-bottom:4px;border-bottom:1px solid #21262d">${f.section}</div>`;
+      return;
+    }
     if(canEdit){
       body+=`<div class="si-modal-row"><span class="si-m-label">${f.label}</span><div class="si-input-wrap" style="flex:1">${_siField(f.key,f.label,si[f.key]||"")}</div></div>`;
     } else {
