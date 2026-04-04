@@ -750,21 +750,20 @@ function _tryAuthLink(){
   }
   return false;
 }
-(async function(){
-  // First try auth link (need state from server)
-  const params=new URLSearchParams(window.location.search);
-  if(params.get('auth')){
-    // Pull state first to get linkTokens
-    const localState=loadState();
-    if(localState)state=localState;
-    await _pullRemote();
-    if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
-    if(_tryAuthLink())return;
-  }
-  const s=sessionStorage.getItem("kh_user");
-  if(s==="guest")guestLogin();
-  else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}
-})();
+// Auth link + auto-login deferred to after state init (see _initAuth below)
+function _initAuth(){
+  (async function(){
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('auth')){
+      await _pullRemote();
+      if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+      if(_tryAuthLink())return;
+    }
+    const s=sessionStorage.getItem("kh_user");
+    if(s==="guest")guestLogin();
+    else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}
+  })();
+}
 
 function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch{return {};}}
 
@@ -865,6 +864,7 @@ function runMigrations(){let c=false;for(const[k,d]of Object.entries(state)){
 runMigrations();
 if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}
 _loadCustomCats();
+_initAuth();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
 function getStatus(id){return state[id]?.status||"todo";}
