@@ -739,7 +739,7 @@ function _tryAuthLink(){
   // Decode: USER_XXXX_USER_XXXX_USER_XXXX...
   const parts=raw.split('_');
   if(parts.length<2)return false;
-  const userId=parts[0];
+  const userId=parts[0].toLowerCase();
   const token=parts.filter((_,i)=>i%2===1).join('');
   if(!token||!userId)return false;
   if(!state.__users)return false;
@@ -1071,8 +1071,9 @@ function copyAuthLink(id){
   if(!lt)return;
   const base=window.location.hostname==='localhost'?'https://spark700.github.io/kh-vfx-tracker/':window.location.origin+window.location.pathname;
   const chunks=lt.match(/.{1,4}/g)||[];
-  const encoded=chunks.join('_'+id+'_');
-  const url=base+'?auth='+id+'_'+encoded;
+  const ID=id.toUpperCase();
+  const encoded=chunks.join('_'+ID+'_');
+  const url=base+'?auth='+ID+'_'+encoded;
   navigator.clipboard.writeText(url);
   // Flash feedback
   const btn=event.target;
