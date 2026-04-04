@@ -1071,7 +1071,7 @@ function changeUserRole(id,role){
 function copyAuthLink(id){
   const lt=state.__users?.[id]?.linkToken;
   if(!lt)return;
-  const base='https://worker-fancy-forest-2daf.contora3d.workers.dev/';
+  const base='https://worker-fancy-forest-2daf.contora.workers.dev/';
   const chunks=lt.match(/.{1,4}/g)||[];
   const ID=id.toUpperCase();
   const encoded=chunks.join('_'+ID+'_');
