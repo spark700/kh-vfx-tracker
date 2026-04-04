@@ -107,6 +107,9 @@
   tr.row-prio-green:hover { background: rgba(63,185,80,0.15) !important; }
   td.id-cell { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: #58a6ff; white-space: nowrap; cursor: pointer; }
   td.id-cell:hover { text-decoration: underline; }
+  .id-preview-cell { padding: 4px 8px !important; }
+  .id-preview-cell .id-label { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #58a6ff; cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
+  .id-preview-cell .id-label:hover { text-decoration: underline; }
   .shot-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2500; display: flex; align-items: center; justify-content: center; }
   .shot-overlay.hidden { display: none; }
   .shot-panel { width: 90vw; max-width: 1200px; max-height: 90vh; background: #161b22; border: 1px solid #30363d; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
@@ -148,9 +151,9 @@
   td.tc-cell { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #8b949e; white-space: nowrap; }
   td.desc-cell { max-width: 400px; word-break: break-word; white-space: normal; }
   td.gif-cell { width: 80px; padding: 6px; }
-  .gif-thumb { width: 70px; height: 44px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid #30363d; transition: 0.15s; display: block; background: #0d1117; }
-  .gif-thumb:hover { border-color: #58a6ff; transform: scale(1.05); }
-  .gif-thumb-wrap { position: relative; width: 70px; height: 44px; }
+  .gif-thumb { width: 120px; height: auto; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid #30363d; transition: 0.15s; display: block; background: #0d1117; }
+  .gif-thumb:hover { border-color: #58a6ff; }
+  .gif-thumb-wrap { position: relative; width: 120px; }
   .gif-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .gif-play-icon::after { content: "▶"; font-size: 16px; color: rgba(255,255,255,0.7); text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
   .gif-none { width: 70px; height: 44px; border-radius: 4px; background: #161b22; border: 1px solid #21262d; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #484f58; }
@@ -237,9 +240,9 @@
   .draw-size::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; cursor: pointer; }
   td.desc-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
   td.desc-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
-  .shot-info-cell { font-size: 12px; color: #8b949e; cursor: pointer; min-width: 280px; }
+  .shot-info-cell { font-size: 13px; color: #8b949e; cursor: pointer; min-width: 300px; }
   .shot-info-cell:hover { color: #c9d1d9; }
-  .si-preview { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 14px; }
+  .si-preview { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 16px; }
   .si-preview span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8b949e; }
   .si-preview span.has { color: #c9d1d9; }
   .si-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: flex; align-items: center; justify-content: center; }
@@ -532,7 +535,6 @@
     <th style="width:30px;cursor:pointer" onclick="togglePrioSort()" id="prioSortTh" title="Sort by priority">⚑</th>
     <th onclick="sortTable(0)" data-col="0" data-label="#">#</th>
     <th onclick="sortTable(1)" data-col="1" data-label="ID">ID</th>
-    <th>Preview</th>
     <th>Shot Info</th>
     <th onclick="sortTable(3)" data-col="3" data-label="Category">Category</th>
     <th onclick="sortTable(4)" data-col="4" data-label="TC In">TC In</th>
@@ -1018,7 +1020,7 @@ function getDesc(id,fallback){return state[id]?.desc||fallback;}
 function getShotInfo(id){return state[id]?.shotInfo||{};}
 function _renderShotInfo(id){
   const si=getShotInfo(id);
-  const v=(k,label)=>`<span><span style="color:#484f58;font-size:9px;display:block;line-height:1;margin-bottom:2px">${label}</span><span class="${si[k]?'has':''}" style="display:block">${si[k]?esc(si[k]):'—'}</span></span>`;
+  const v=(k,label)=>`<span><span style="color:#484f58;font-size:10px;display:block;line-height:1;margin-bottom:3px">${label}</span><span class="${si[k]?'has':''}" style="display:block">${si[k]?esc(si[k]):'—'}</span></span>`;
   return`<div class="si-preview">${v("camera","Camera")}${v("lens","Lens")}${v("focalLength","Focal")}${v("resolution","Resolution")}${v("fps","FPS")}${v("shutterAngle","Shutter")}${v("colorSpace","Color Space")}${v("gamma","Gamma")}${v("bitDepth","Bit Depth")}</div>`;
 }
 const SI_OPTIONS={
@@ -2407,7 +2409,7 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowRight"){e.preventDefault();stepFrame(1);}
   if(e.key==="ArrowUp"||e.key==="ArrowDown"){
     e.preventDefault();
-    const ids=Array.from(document.querySelectorAll("#tbody tr .id-cell")).map(td=>td.textContent.trim()).filter(id=>hasGif(id));
+    const ids=Array.from(document.querySelectorAll("#tbody tr .id-label")).map(el=>el.textContent.trim()).filter(id=>hasGif(id));
     if(!ids.length)return;
     const cur=_gifCurrentId;
     const idx=ids.indexOf(cur);
@@ -2772,16 +2774,16 @@ function render(){
       const an=getAdminNote(r.id);
       const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
       const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
-      // [0]=prio [1]=# [2]=ID [3]=gif(skip) [4]=shotInfo [5]=cat [6]=tcIn [7]=tcOut [8]=artist [9]=status [10]=admin [11]=chat
+      // [0]=prio [1]=# [2]=ID+preview [3]=shotInfo [4]=cat [5]=tcIn [6]=tcOut [7]=artist [8]=status [9]=admin [10]=chat
       const prio=getPriority(r.id);const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
       if(cells[0]){const box=cells[0].querySelector('.prio-tag');if(box)box.className=prioTagClass;}
       tr.className=prio?'row-prio-'+prio:'';
-      if(cells[4]&&!cells[4].querySelector('.si-edit'))cells[4].innerHTML=_renderShotInfo(r.id);
-      if(cells[5]){const rc=getCat(r.id);cells[5].innerHTML=isAdmin()?_catTag(r.id,rc):_catTagHtml(rc);}
-      if(cells[8]){const sel=cells[8].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
-      if(cells[9]){const sel=cells[9].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
-      if(cells[10]&&!cells[10].querySelector('.desc-edit-ta'))cells[10].innerHTML=an||'<span style="color:#484f58">...</span>';
-      if(cells[11])cells[11].innerHTML=`<div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div>`;
+      if(cells[3]&&!cells[3].querySelector('.si-edit'))cells[3].innerHTML=_renderShotInfo(r.id);
+      if(cells[4]){const rc=getCat(r.id);cells[4].innerHTML=isAdmin()?_catTag(r.id,rc):_catTagHtml(rc);}
+      if(cells[7]){const sel=cells[7].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
+      if(cells[8]){const sel=cells[8].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
+      if(cells[9]&&!cells[9].querySelector('.desc-edit-ta'))cells[9].innerHTML=an||'<span style="color:#484f58">...</span>';
+      if(cells[10])cells[10].innerHTML=`<div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div>`;
     });
   }
   updateStats();
@@ -2801,8 +2803,7 @@ function _buildRow(r){
   return `<tr class="${rowPrioClass}">
     <td><div class="${prioTagClass}" ${prioClick} ${prioStyle}></div></td>
     <td style="color:#484f58">${r.idx}</td>
-    <td class="id-cell" onclick="openShot('${r.id}')">${r.id}</td>
-    <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
+    <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="shot-info-cell" onclick="openShotInfoModal('${r.id}')" data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
     <td class="category-cell">${isAdmin()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
     <td class="tc-cell">${r.tcIn}</td>
