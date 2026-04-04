@@ -237,12 +237,18 @@
   .draw-size::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; cursor: pointer; }
   td.desc-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
   td.desc-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
-  .shot-info-cell { font-size: 11px; color: #8b949e; line-height: 1.5; max-width: 200px; white-space: normal; }
-  .shot-info-cell span { display: block; }
-  .shot-info-cell .si-label { color: #484f58; font-size: 10px; text-transform: uppercase; }
-  .shot-info-cell .si-val { color: #c9d1d9; }
-  .shot-info-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
-  .shot-info-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
+  .shot-info-cell { font-size: 10px; color: #8b949e; line-height: 1.3; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .shot-info-cell:hover { color: #58a6ff; }
+  .si-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: flex; align-items: center; justify-content: center; }
+  .si-modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 420px; max-width: 90vw; }
+  .si-modal-header { padding: 14px 18px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
+  .si-modal-header h3 { margin: 0; color: #c9d1d9; font-size: 15px; }
+  .si-modal-close { background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; }
+  .si-modal-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .si-modal-row { display: flex; align-items: center; gap: 10px; }
+  .si-modal-row .si-m-label { width: 90px; font-size: 11px; color: #8b949e; text-transform: uppercase; flex-shrink: 0; }
+  .si-modal-row .si-m-val { color: #c9d1d9; font-size: 13px; flex: 1; }
+  .si-modal-footer { padding: 10px 18px; border-top: 1px solid #30363d; display: flex; justify-content: flex-end; gap: 8px; }
   .si-input-wrap { position: relative; }
   .si-input { width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 3px 6px; border-radius: 4px; font-size: 11px; box-sizing: border-box; }
   .si-input:focus { border-color: #1f6feb; outline: none; }
@@ -1009,13 +1015,11 @@ function getShotInfo(id){return state[id]?.shotInfo||{};}
 function _renderShotInfo(id){
   const si=getShotInfo(id);
   if(!si.camera&&!si.lens&&!si.colorSpace&&!si.gamma&&!si.sensor)return'<span style="color:#484f58">...</span>';
-  let h='';
-  if(si.camera)h+=`<span><span class="si-label">cam</span> <span class="si-val">${esc(si.camera)}</span></span>`;
-  if(si.sensor)h+=`<span><span class="si-label">sensor</span> <span class="si-val">${esc(si.sensor)}</span></span>`;
-  if(si.lens)h+=`<span><span class="si-label">lens</span> <span class="si-val">${esc(si.lens)}</span></span>`;
-  if(si.colorSpace)h+=`<span><span class="si-label">cs</span> <span class="si-val">${esc(si.colorSpace)}</span></span>`;
-  if(si.gamma)h+=`<span><span class="si-label">gamma</span> <span class="si-val">${esc(si.gamma)}</span></span>`;
-  return h;
+  const parts=[];
+  if(si.camera)parts.push(si.camera);
+  if(si.lens)parts.push(si.lens);
+  if(si.colorSpace)parts.push(si.colorSpace);
+  return esc(parts.join(' · '))||'<span style="color:#484f58">...</span>';
 }
 const SI_OPTIONS={
   camera:[
@@ -1223,34 +1227,49 @@ function _attachSiDropdown(input,options){
   input.addEventListener("input",show);
   input.addEventListener("blur",()=>setTimeout(close,150));
 }
-function startEditShotInfo(id,td,ev){
-  if(!isAdmin())return;
-  if(td.querySelector('.si-edit'))return;
-  ev.stopPropagation();
+function openShotInfoModal(id){
+  closeShotInfoModal();
   const si=getShotInfo(id);
-  td.innerHTML=`<div class="si-edit" style="display:flex;flex-direction:column;gap:4px">
-    ${_siField("camera","Camera",si.camera||"")}
-    ${_siField("sensor","Sensor",si.sensor||"")}
-    ${_siField("lens","Lens",si.lens||"")}
-    ${_siField("colorSpace","Color Space",si.colorSpace||"")}
-    ${_siField("gamma","Gamma",si.gamma||"")}
-  </div>`;
-  const inputs=td.querySelectorAll('.si-input');
-  inputs.forEach(inp=>_attachSiDropdown(inp,SI_OPTIONS[inp.dataset.f]||[]));
-  inputs[0].focus();
-  function save(){
-    if(!td.querySelector('.si-edit'))return;
-    const obj={};
-    inputs.forEach(i=>{const v=i.value.trim();if(v)obj[i.dataset.f]=v;});
-    if(!state[id])state[id]={};
-    state[id].shotInfo=obj;
-    saveState(state);
-    td.innerHTML=_renderShotInfo(id);
-  }
-  inputs.forEach(i=>{i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape'){td.innerHTML=_renderShotInfo(id);}});});
-  td.querySelector('.si-edit').addEventListener('focusout',(e)=>{
-    setTimeout(()=>{if(td.querySelector('.si-edit')&&!td.querySelector('.si-edit:focus-within'))save();},200);
+  const canEdit=isAdmin();
+  const ov=document.createElement("div");
+  ov.className="si-modal-overlay";ov.id="siModalOverlay";
+  ov.onclick=(e)=>{if(e.target===ov)closeShotInfoModal();};
+  const fields=[
+    {key:"camera",label:"Camera"},{key:"sensor",label:"Sensor"},{key:"lens",label:"Lens"},
+    {key:"colorSpace",label:"Color Space"},{key:"gamma",label:"Gamma"}
+  ];
+  let body='';
+  fields.forEach(f=>{
+    if(canEdit){
+      body+=`<div class="si-modal-row"><span class="si-m-label">${f.label}</span><div class="si-input-wrap" style="flex:1">${_siField(f.key,f.label,si[f.key]||"")}</div></div>`;
+    } else {
+      body+=`<div class="si-modal-row"><span class="si-m-label">${f.label}</span><span class="si-m-val">${esc(si[f.key]||"—")}</span></div>`;
+    }
   });
+  let footer='';
+  if(canEdit)footer=`<div class="si-modal-footer"><button onclick="closeShotInfoModal()" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">Cancel</button><button onclick="saveShotInfoModal('${id}')" style="background:#1f6feb;border:1px solid #1f6feb;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">Save</button></div>`;
+  ov.innerHTML=`<div class="si-modal"><div class="si-modal-header"><h3>${id} — Shot Info</h3><button class="si-modal-close" onclick="closeShotInfoModal()">&times;</button></div><div class="si-modal-body">${body}</div>${footer}</div>`;
+  document.body.appendChild(ov);
+  if(canEdit){
+    const inputs=ov.querySelectorAll('.si-input');
+    inputs.forEach(inp=>_attachSiDropdown(inp,SI_OPTIONS[inp.dataset.f]||[]));
+    inputs[0]?.focus();
+    // Enter to save
+    inputs.forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveShotInfoModal(id);}if(e.key==='Escape')closeShotInfoModal();}));
+  }
+}
+function closeShotInfoModal(){const d=document.getElementById("siModalOverlay");if(d)d.remove();}
+function saveShotInfoModal(id){
+  const ov=document.getElementById("siModalOverlay");
+  if(!ov)return;
+  const inputs=ov.querySelectorAll('.si-input');
+  const obj={};
+  inputs.forEach(i=>{const v=i.value.trim();if(v)obj[i.dataset.f]=v;});
+  if(!state[id])state[id]={};
+  state[id].shotInfo=obj;
+  saveState(state);
+  closeShotInfoModal();
+  render();
 }
 function nextMsgId(tid){const msgs=getChat(tid);return msgs.length?Math.max(...msgs.map(m=>m.id||0))+1:1;}
 function chatPreview(id){const msgs=getChat(id).filter(m=>!m.deleted);if(!msgs.length)return{text:"",count:0};return{text:msgs[msgs.length-1].text,count:msgs.length};}
@@ -2567,7 +2586,7 @@ function _buildRow(r){
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-cell" onclick="openShot('${r.id}')">${r.id}</td>
     <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
-    <td class="shot-info-cell${isAdmin()?' editable':''}" ${isAdmin()?`onclick="startEditShotInfo('${r.id}',this,event)"`:''} data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
+    <td class="shot-info-cell" onclick="openShotInfoModal('${r.id}')" data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
     <td class="category-cell">${isAdmin()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
     <td class="tc-cell">${r.tcIn}</td>
     <td class="tc-cell">${r.tcOut}</td>
