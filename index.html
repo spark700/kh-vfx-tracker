@@ -1019,7 +1019,7 @@ function getShotInfo(id){return state[id]?.shotInfo||{};}
 function _renderShotInfo(id){
   const si=getShotInfo(id);
   const v=(k)=>si[k]?`<span class="has">${esc(si[k])}</span>`:`<span>—</span>`;
-  return`<div class="si-preview">${v("camera")}${v("resolution")}${v("colorSpace")}${v("lens")}${v("fps")}${v("gamma")}${v("focalLength")}${v("shutterAngle")}${v("bitDepth")}</div>`;
+  return`<div class="si-preview">${v("camera")}${v("lens")}${v("focalLength")}${v("resolution")}${v("fps")}${v("shutterAngle")}${v("colorSpace")}${v("gamma")}${v("bitDepth")}</div>`;
 }
 const SI_OPTIONS={
   camera:[
