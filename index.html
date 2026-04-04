@@ -46,7 +46,9 @@
   .add-artist-form { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
   .add-artist-form input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; }
   .add-artist-form input:focus { border-color: #1f6feb; outline: none; }
-  .add-artist-form select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  .add-artist-form select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; -webkit-appearance: none; appearance: none; }
+  .user-regen { background: none; border: none; color: #484f58; cursor: pointer; font-size: 13px; padding: 2px 4px; flex-shrink: 0; }
+  .user-regen:hover { color: #d29922; }
   .generated-key { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; margin-top: 12px; display: flex; align-items: center; gap: 8px; }
   .generated-key code { color: #3fb950; font-family: 'SF Mono', monospace; font-size: 14px; flex: 1; word-break: break-all; }
   .generated-key button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
@@ -864,8 +866,9 @@ function _renderUserList(){
     if(key){
       html+=`<code class="user-key" onclick="navigator.clipboard.writeText('${key}');this.style.color='#3fb950';setTimeout(()=>this.style.color='',800)" title="Click to copy">${key}</code>`;
     } else {
-      html+=`<button class="files-btn" onclick="regenKey('${id}')" style="font-size:11px;padding:2px 8px">🔑 New key</button>`;
+      html+=`<code class="user-key" style="color:#484f58;cursor:default">••••••</code>`;
     }
+    html+=`<button class="user-regen" onclick="regenKey('${id}')" title="Generate new key">🔄</button>`;
     html+=`<button class="artist-del" onclick="removeUser('${id}')" title="Remove">&times;</button>`;
     html+=`</div>`;
   });
