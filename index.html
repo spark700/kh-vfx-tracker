@@ -243,6 +243,14 @@
   .shot-info-cell .si-val { color: #c9d1d9; }
   .shot-info-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
   .shot-info-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
+  .si-input-wrap { position: relative; }
+  .si-input { width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 3px 6px; border-radius: 4px; font-size: 11px; box-sizing: border-box; }
+  .si-input:focus { border-color: #1f6feb; outline: none; }
+  .si-dd { position: absolute; top: 100%; left: 0; right: 0; background: #161b22; border: 1px solid #30363d; border-radius: 0 0 6px 6px; max-height: 150px; overflow-y: auto; z-index: 100; }
+  .si-dd::-webkit-scrollbar { width: 4px; } .si-dd::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+  .si-dd-item { padding: 4px 8px; font-size: 11px; color: #c9d1d9; cursor: pointer; }
+  .si-dd-item:hover { background: #1f6feb; }
+  .si-dd-item .si-dd-sub { color: #8b949e; font-size: 10px; }
   .desc-edit-ta { background: transparent; border: none; color: #c9d1d9; padding: 0; font-size: 14px; width: 100%; font-family: inherit; line-height: 1.5; resize: none; overflow: hidden; outline: 1px solid #1f6feb; outline-offset: 4px; border-radius: 4px; }
   .desc-edit-ta:focus { outline: 1px solid #1f6feb; outline-offset: 4px; }
   td.category-cell { white-space: nowrap; }
@@ -1009,21 +1017,109 @@ function _renderShotInfo(id){
   if(si.gamma)h+=`<span><span class="si-label">gamma</span> <span class="si-val">${esc(si.gamma)}</span></span>`;
   return h;
 }
+const SI_OPTIONS={
+  camera:[
+    "ARRI Alexa Mini","ARRI Alexa Mini LF","ARRI Alexa 35","ARRI Alexa SXT","ARRI Alexa LF",
+    "RED V-Raptor","RED V-Raptor XL","RED DSMC2 Monstro 8K","RED DSMC2 Helium 8K","RED DSMC2 Gemini 5K","RED Komodo 6K","RED Komodo-X",
+    "Sony Venice","Sony Venice 2","Sony FX9","Sony FX6","Sony FX3","Sony A7S III","Sony A1",
+    "Canon C500 Mark II","Canon C300 Mark III","Canon C70","Canon R5 C","Canon R5",
+    "Blackmagic URSA Mini Pro 12K","Blackmagic URSA Mini Pro G2","Blackmagic Pocket 6K Pro","Blackmagic Pocket 4K",
+    "Panasonic VariCam LT","Panasonic S1H","Panasonic GH6",
+    "Nikon Z9","Nikon Z8",
+    "DJI Ronin 4D","DJI Inspire 3","DJI Mavic 3 Cine",
+    "GoPro Hero 12","GoPro Hero 11","Insta360 X4",
+    "iPhone 15 Pro Max","iPhone 16 Pro Max",
+    "Phantom Flex4K","Phantom VEO 4K",
+  ],
+  sensor:[
+    "FF 36×24mm","LF 36.7×25.54mm","S35 23.76×13.365mm","S35 25.12×18.84mm",
+    "RED Monstro 40.96×21.6mm","RED Helium 29.9×15.77mm","RED Gemini 30.72×18mm","RED Komodo 27.03×14.26mm",
+    "ARRI ALEV III S35 28.17×18.13mm","ARRI ALEV IV LF 36.7×25.54mm","ARRI ALEV 35 27.99×19.22mm",
+    "Sony Venice FF 36×24mm","Sony S35 23.3×13.1mm",
+    "Canon DGO S35 26.2×13.8mm","Canon FF 36×24mm",
+    "MFT 17.3×13mm","APS-C 23.5×15.6mm","1\" 13.2×8.8mm",
+    "1/1.3\" 9.8×7.3mm","1/2.3\" 6.17×4.55mm",
+  ],
+  lens:[
+    "ARRI Signature Prime","ARRI Master Prime","ARRI Ultra Prime","ARRI/Zeiss Master Anamorphic",
+    "Zeiss Supreme Prime","Zeiss CP.3","Zeiss Compact Prime CP.2",
+    "Cooke S7/i Full Frame","Cooke S4/i","Cooke 5/i","Cooke Anamorphic/i",
+    "Canon CN-E Prime","Canon CN-R Prime","Canon Sumire Prime",
+    "Sony CineAlta Prime","Sigma Cine FF Classic","Sigma Cine FF High Speed",
+    "Leica Summicron-C","Leica Summilux-C","Leica Thalia",
+    "Panavision Primo 70","Panavision Ultra Vista","Panavision Anamorphic G-series",
+    "Angenieux EZ-1 30-90mm","Angenieux EZ-2 15-40mm","Angenieux Optimo 24-290mm","Angenieux Optimo Prime",
+    "Canon CN-E 30-300mm","Canon CN20×50 50-1000mm",
+    "Fujinon Premista 28-100mm","Fujinon Premista 80-250mm",
+    "Tokina Vista Prime","Atlas Orion Anamorphic","Tribe7 Blackwing7",
+    "DJI DL 24mm","DJI DL 35mm","DJI DL 50mm",
+    "14mm","16mm","18mm","21mm","24mm","25mm","28mm","32mm","35mm","40mm","50mm","65mm","75mm","85mm","100mm","135mm","150mm","200mm","300mm",
+  ],
+  colorSpace:[
+    "ACES AP0","ACEScg (AP1)","ACEScct",
+    "ARRI Wide Gamut 3","ARRI Wide Gamut 4",
+    "REDWideGamutRGB","RED IPP2",
+    "Sony S-Gamut3","Sony S-Gamut3.Cine",
+    "Canon Cinema Gamut","Canon Log Gamut",
+    "Blackmagic Wide Gamut","Blackmagic Design Film Gen 5",
+    "Panasonic V-Gamut",
+    "DJI D-Gamut",
+    "Rec.709 / sRGB","Rec.2020","DCI-P3","Display P3",
+    "Linear / Scene Referred",
+  ],
+  gamma:[
+    "ARRI LogC3","ARRI LogC4",
+    "REDLog3G10","REDLogFilm",
+    "Sony S-Log3","Sony S-Log2",
+    "Canon Log 2","Canon Log 3",
+    "Blackmagic Film Gen 5","Blackmagic Video Gen 5",
+    "Panasonic V-Log","Panasonic V-Log L",
+    "DJI D-Log M","DJI D-Log",
+    "Nikon N-Log",
+    "Rec.709 (2.4)","sRGB (2.2)","Linear","PQ (ST 2084)","HLG",
+    "Cineon Film Log",
+  ],
+};
+function _siField(field,placeholder,value){
+  return`<div class="si-input-wrap"><input class="si-input" placeholder="${placeholder}" value="${esc(value)}" data-f="${field}" autocomplete="off"></div>`;
+}
+function _attachSiDropdown(input,options){
+  let dd=null;
+  function show(){
+    close();
+    const q=input.value.toLowerCase();
+    const filtered=options.filter(o=>o.toLowerCase().includes(q));
+    if(!filtered.length)return;
+    dd=document.createElement("div");dd.className="si-dd";
+    filtered.slice(0,15).forEach(o=>{
+      const d=document.createElement("div");d.className="si-dd-item";d.textContent=o;
+      d.onmousedown=(e)=>{e.preventDefault();input.value=o;close();input.focus();};
+      dd.appendChild(d);
+    });
+    input.parentElement.appendChild(dd);
+  }
+  function close(){if(dd){dd.remove();dd=null;}}
+  input.addEventListener("focus",show);
+  input.addEventListener("input",show);
+  input.addEventListener("blur",()=>setTimeout(close,150));
+}
 function startEditShotInfo(id,td,ev){
   if(!isAdmin())return;
   if(td.querySelector('.si-edit'))return;
   ev.stopPropagation();
   const si=getShotInfo(id);
   td.innerHTML=`<div class="si-edit" style="display:flex;flex-direction:column;gap:4px">
-    <input placeholder="Camera" value="${esc(si.camera||'')}" data-f="camera" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:3px 6px;border-radius:4px;font-size:11px">
-    <input placeholder="Sensor" value="${esc(si.sensor||'')}" data-f="sensor" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:3px 6px;border-radius:4px;font-size:11px">
-    <input placeholder="Lens" value="${esc(si.lens||'')}" data-f="lens" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:3px 6px;border-radius:4px;font-size:11px">
-    <input placeholder="Color Space" value="${esc(si.colorSpace||'')}" data-f="colorSpace" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:3px 6px;border-radius:4px;font-size:11px">
-    <input placeholder="Gamma" value="${esc(si.gamma||'')}" data-f="gamma" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:3px 6px;border-radius:4px;font-size:11px">
+    ${_siField("camera","Camera",si.camera||"")}
+    ${_siField("sensor","Sensor",si.sensor||"")}
+    ${_siField("lens","Lens",si.lens||"")}
+    ${_siField("colorSpace","Color Space",si.colorSpace||"")}
+    ${_siField("gamma","Gamma",si.gamma||"")}
   </div>`;
-  const inputs=td.querySelectorAll('input');
+  const inputs=td.querySelectorAll('.si-input');
+  inputs.forEach(inp=>_attachSiDropdown(inp,SI_OPTIONS[inp.dataset.f]||[]));
   inputs[0].focus();
   function save(){
+    if(!td.querySelector('.si-edit'))return;
     const obj={};
     inputs.forEach(i=>{const v=i.value.trim();if(v)obj[i.dataset.f]=v;});
     if(!state[id])state[id]={};
@@ -1031,9 +1127,9 @@ function startEditShotInfo(id,td,ev){
     saveState(state);
     td.innerHTML=_renderShotInfo(id);
   }
-  inputs.forEach(i=>{i.addEventListener('keydown',e=>{if(e.key==='Enter')save();if(e.key==='Escape'){td.innerHTML=_renderShotInfo(id);}});});
+  inputs.forEach(i=>{i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape'){td.innerHTML=_renderShotInfo(id);}});});
   td.querySelector('.si-edit').addEventListener('focusout',(e)=>{
-    setTimeout(()=>{if(!td.querySelector('.si-edit:focus-within'))save();},100);
+    setTimeout(()=>{if(td.querySelector('.si-edit')&&!td.querySelector('.si-edit:focus-within'))save();},200);
   });
 }
 function nextMsgId(tid){const msgs=getChat(tid);return msgs.length?Math.max(...msgs.map(m=>m.id||0))+1:1;}
