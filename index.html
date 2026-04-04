@@ -39,8 +39,10 @@
   .artist-row .artist-dot { width: 10px; height: 10px; border-radius: 50%; }
   .artist-row .artist-name { flex: 1; color: #c9d1d9; font-size: 14px; }
   .artist-row .artist-role { color: #8b949e; font-size: 11px; text-transform: uppercase; }
-  .artist-row .artist-del { background: none; border: none; color: #484f58; cursor: pointer; font-size: 14px; }
+  .artist-row .artist-del { background: none; border: none; color: #484f58; cursor: pointer; font-size: 14px; flex-shrink: 0; }
   .artist-row .artist-del:hover { color: #f85149; }
+  .user-key { font-family: 'SF Mono', monospace; font-size: 12px; color: #8b949e; cursor: pointer; background: #0d1117; padding: 2px 8px; border-radius: 4px; border: 1px solid #21262d; transition: .15s; }
+  .user-key:hover { color: #58a6ff; border-color: #58a6ff; }
   .add-artist-form { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
   .add-artist-form input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; }
   .add-artist-form input:focus { border-color: #1f6feb; outline: none; }
@@ -829,84 +831,110 @@ function toggleAdminMenu(){
   if(old){old.remove();return;}
   const dd=document.createElement("div");
   dd.className="admin-menu";dd.id="adminMenu";
-  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();openArtistManager()">👥 Manage Artists</div>`;
+  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();openUserManager()">👥 Manage Users</div>`;
   document.body.appendChild(dd);
   setTimeout(()=>document.addEventListener("click",closeAdminMenu,{once:true}),0);
 }
 function closeAdminMenu(){const d=document.getElementById("adminMenu");if(d)d.remove();}
 
-function openArtistManager(){
+function openUserManager(){
   const ov=document.createElement("div");
   ov.className="admin-modal-overlay";ov.id="artistManagerOverlay";
-  ov.onclick=(e)=>{if(e.target===ov)closeArtistManager();};
-  const artists=_getArtists();
-  let html=`<div class="admin-modal"><div class="admin-modal-header"><h3>Manage Artists</h3><button class="admin-modal-close" onclick="closeArtistManager()">&times;</button></div><div class="admin-modal-body">`;
-  html+=`<div id="artistList">`;
-  artists.forEach((a,i)=>{
-    html+=`<div class="artist-row"><div class="artist-dot dot-${a.id}" style="background:${_artistColor(a.id)}"></div><span class="artist-name">${esc(a.display)}</span><span class="artist-role">artist</span><button class="artist-del" onclick="removeArtist(${i})" title="Remove">&times;</button></div>`;
-  });
-  html+=`</div>`;
-  html+=`<div class="add-artist-form"><input type="text" id="newArtistName" placeholder="Artist name..."><button class="files-btn primary" onclick="addArtist()">+ Add</button></div>`;
+  ov.onclick=(e)=>{if(e.target===ov)closeUserManager();};
+  let html=`<div class="admin-modal"><div class="admin-modal-header"><h3>Manage Users</h3><button class="admin-modal-close" onclick="closeUserManager()">&times;</button></div><div class="admin-modal-body">`;
+  html+=`<div id="userList">${_renderUserList()}</div>`;
+  html+=`<div class="add-artist-form"><input type="text" id="newUserName" placeholder="Name..."><select id="newUserRole"><option value="artist">Artist</option><option value="admin">Admin</option><option value="client">Client</option></select><button class="files-btn primary" onclick="addUser()">+ Add</button></div>`;
   html+=`<div id="generatedKeyBox"></div>`;
   html+=`</div></div>`;
   ov.innerHTML=html;
   document.body.appendChild(ov);
 }
-function closeArtistManager(){const d=document.getElementById("artistManagerOverlay");if(d)d.remove();}
-function _artistColor(id){
-  const colors=["#f97583","#79c0ff","#d2a8ff","#7ee787","#ffa657","#ff7b72","#a5d6ff"];
-  let h=0;for(let i=0;i<id.length;i++)h=((h<<5)-h)+id.charCodeAt(i);
-  return colors[Math.abs(h)%colors.length];
+function _renderUserList(){
+  let html="";
+  const allUsers=Object.entries(USERS);
+  allUsers.forEach(([id,u])=>{
+    const key=state.__users?.[id]?.plainKey||"";
+    const roleColors={admin:"#f97583",artist:"#79c0ff",client:"#7ee787"};
+    const rc=roleColors[u.role]||"#8b949e";
+    const roleOpts=["admin","artist","client"].map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join("");
+    html+=`<div class="artist-row">`;
+    html+=`<div class="artist-dot" style="background:${rc}"></div>`;
+    html+=`<span class="artist-name">${esc(u.display)}</span>`;
+    html+=`<select class="user-role-select" onchange="changeUserRole('${id}',this.value)" style="background:#0d1117;border:1px solid #30363d;color:${rc};padding:2px 6px;border-radius:4px;font-size:11px;text-transform:uppercase">${roleOpts}</select>`;
+    if(key){
+      html+=`<code class="user-key" onclick="navigator.clipboard.writeText('${key}');this.style.color='#3fb950';setTimeout(()=>this.style.color='',800)" title="Click to copy">${key}</code>`;
+    } else {
+      html+=`<button class="files-btn" onclick="regenKey('${id}')" style="font-size:11px;padding:2px 8px">🔑 New key</button>`;
+    }
+    html+=`<button class="artist-del" onclick="removeUser('${id}')" title="Remove">&times;</button>`;
+    html+=`</div>`;
+  });
+  return html;
 }
+function closeUserManager(){const d=document.getElementById("artistManagerOverlay");if(d)d.remove();}
 function _generateKey(len){
   const chars="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   let r="";for(let i=0;i<len;i++)r+=chars[Math.floor(Math.random()*chars.length)];
   return r;
 }
-async function addArtist(){
-  const inp=document.getElementById("newArtistName");
+async function addUser(){
+  const inp=document.getElementById("newUserName");
+  const roleEl=document.getElementById("newUserRole");
   const name=inp?.value.trim();
+  const role=roleEl?.value||"artist";
   if(!name)return;
   const id=name.toLowerCase().replace(/[^a-z0-9]/g,"_");
   if(!id)return;
-  const artists=_getArtists();
-  if(artists.find(a=>a.id===id)){alert("Artist with this ID already exists");return;}
+  if(USERS[id]){alert("User with this ID already exists");return;}
   const key=_generateKey(12);
   const hash=await sha256(key);
-  // Add to USERS
-  USERS[id]={hash,display:name,role:"artist"};
-  // Add to artists list in state
-  const newArtists=[...artists,{id,display:name}];
+  USERS[id]={hash,display:name,role};
   if(!state.__users)state.__users={};
-  state.__users[id]={hash,display:name,role:"artist"};
-  state.__artists=newArtists;
+  state.__users[id]={hash,display:name,role,plainKey:key};
+  if(role==="artist"){
+    const artists=_getArtists();
+    artists.push({id,display:name});
+    state.__artists=artists;
+  }
   saveState(state);
   inp.value="";
-  // Show generated key
-  document.getElementById("generatedKeyBox").innerHTML=`<div class="generated-key"><code>${key}</code><button onclick="navigator.clipboard.writeText('${key}');this.textContent='Copied!'">Copy</button></div><div style="color:#8b949e;font-size:11px;margin-top:4px">Save this key — it won't be shown again. ${esc(name)} uses it to log in.</div>`;
-  // Refresh artist list
-  const list=document.getElementById("artistList");
-  if(list){
-    let lhtml="";
-    newArtists.forEach((a,i)=>{
-      lhtml+=`<div class="artist-row"><div class="artist-dot" style="background:${_artistColor(a.id)}"></div><span class="artist-name">${esc(a.display)}</span><span class="artist-role">artist</span><button class="artist-del" onclick="removeArtist(${i})" title="Remove">&times;</button></div>`;
-    });
-    list.innerHTML=lhtml;
-  }
+  document.getElementById("generatedKeyBox").innerHTML=`<div class="generated-key"><code>${key}</code><button onclick="navigator.clipboard.writeText('${key}');this.textContent='Copied!'">Copy</button></div><div style="color:#8b949e;font-size:11px;margin-top:4px">${esc(name)} uses this key to log in.</div>`;
+  document.getElementById("userList").innerHTML=_renderUserList();
   render();
 }
-function removeArtist(idx){
-  const artists=_getArtists();
-  const a=artists[idx];
-  if(!a)return;
-  if(!confirm("Remove artist "+a.display+"?"))return;
-  artists.splice(idx,1);
-  state.__artists=artists;
-  if(state.__users)delete state.__users[a.id];
-  delete USERS[a.id];
+async function regenKey(id){
+  if(!USERS[id])return;
+  const key=_generateKey(12);
+  const hash=await sha256(key);
+  USERS[id].hash=hash;
+  if(!state.__users)state.__users={};
+  if(!state.__users[id])state.__users[id]={...USERS[id]};
+  state.__users[id].hash=hash;
+  state.__users[id].plainKey=key;
   saveState(state);
-  closeArtistManager();
-  openArtistManager();
+  document.getElementById("userList").innerHTML=_renderUserList();
+}
+function changeUserRole(id,role){
+  if(!USERS[id])return;
+  USERS[id].role=role;
+  if(!state.__users)state.__users={};
+  if(!state.__users[id])state.__users[id]={...USERS[id]};
+  state.__users[id].role=role;
+  const artists=_getArtists().filter(a=>a.id!==id);
+  if(role==="artist")artists.push({id,display:USERS[id].display});
+  state.__artists=artists;
+  saveState(state);
+  document.getElementById("userList").innerHTML=_renderUserList();
+  render();
+}
+function removeUser(id){
+  if(id===currentUser?.id){alert("Cannot remove yourself");return;}
+  if(!confirm("Remove "+USERS[id]?.display+"?"))return;
+  delete USERS[id];
+  if(state.__users)delete state.__users[id];
+  state.__artists=_getArtists().filter(a=>a.id!==id);
+  saveState(state);
+  document.getElementById("userList").innerHTML=_renderUserList();
   render();
 }
 
