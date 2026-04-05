@@ -4339,7 +4339,7 @@ function _renderShotFiles(id){
         <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
-        <td class="f-actions">${shareBtn}${_chatFileMode&&!f.locked?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
+        <td class="f-actions">${shareBtn}${_chatFileMode?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
       </tr>`;
     } else {
       if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
@@ -4357,7 +4357,7 @@ function _renderShotFiles(id){
         <td class="f-size">${f.size||''}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date">${f.date||''}</td>
-        <td class="f-actions">${_chatFileMode&&f.url?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}${dlBtn}${fileDelBtn}</td>
+        <td class="f-actions">${_chatFileMode?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}${dlBtn}${fileDelBtn}</td>
       </tr>`;
     }
   }
