@@ -4564,7 +4564,8 @@ function _renderShotFiles(id){
       const selAttr2=f.locked?'':(` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`);
       const grip2=f.locked?`<span class="f-grip f-grip-locked">⠿</span>`:`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`;
       const fileTip=_buildFileTip(id,f.name,f.size||'',editCell,f.date||'',_fileIcon(f.name));
-      html+=`<tr${selAttr2}${fileTip}>
+      const readmeAttr=(f.name==='README.txt'&&f.url)?` data-readme-url="${esc(f.url)}" style="cursor:pointer"`:'';
+      html+=`<tr${selAttr2}${fileTip}${readmeAttr}>
         <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
         <td class="f-size"></td>
         <td class="f-size">${f.size||''}</td>
@@ -4712,6 +4713,12 @@ function _renderShotFiles(id){
     td.closest("tr").addEventListener("dblclick",e=>{
       if(e.target.closest("button,a"))return;
       _filesPath.push(td.dataset.navFolder);_renderShotFiles(id);
+    });
+  });
+  body.querySelectorAll("tr[data-readme-url]").forEach(tr=>{
+    tr.addEventListener("click",e=>{
+      if(e.target.closest("button,a"))return;
+      _openReadme(tr.dataset.readmeUrl);
     });
   });
   // Single click = select (skip if just finished rect-select)
@@ -5519,6 +5526,18 @@ function _showChoice(title,msg,btnA,btnB){
     ov.querySelector("#choiceCancel").onclick=()=>{ov.remove();resolve(null);};
     ov.addEventListener("click",(e)=>{if(e.target===ov){ov.remove();resolve(null);}});
   });
+}
+async function _openReadme(url){
+  try{
+    const r=await fetch(url);
+    const text=await r.text();
+    const ov=document.createElement("div");
+    ov.className="confirm-overlay";
+    ov.innerHTML=`<div class="confirm-box" style="max-width:620px;max-height:80vh;overflow:auto"><div class="confirm-title">README</div><div class="confirm-msg" style="text-align:left"><pre style="white-space:pre-wrap;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.5;color:#c9d1d9;margin:0">${esc(text)}</pre></div><div class="confirm-btns"><button class="confirm-btn cancel" id="confirmOk">Close</button></div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector("#confirmOk").onclick=()=>ov.remove();
+    ov.addEventListener("click",(e)=>{if(e.target===ov)ov.remove();});
+  }catch(e){}
 }
 function _showAlert(title,msg){
   return new Promise((resolve)=>{
