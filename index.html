@@ -452,10 +452,11 @@
   .cf-tip .cft-edit { flex-shrink: 0; max-width: 200px; opacity: 1; overflow: hidden; }
   .cf-tip .cft-date { color: #8b949e; font-size: 11px; flex-shrink: 0; max-width: 120px; opacity: 1; overflow: hidden; }
   .cf-tip.drag-active { border-color: #58a6ff; box-shadow: 0 4px 16px rgba(88,166,255,0.3); padding: 8px 14px; font-weight: 600; gap: 0; }
-  .cf-tip.drag-active .cft-name { max-width: 180px; }
-  .cf-tip.drag-active .cft-size,
-  .cf-tip.drag-active .cft-edit,
-  .cf-tip.drag-active .cft-date { max-width: 0; opacity: 0; padding: 0; margin: 0; }
+  .cf-tip.drag-locked { border-color: #f85149; box-shadow: 0 4px 16px rgba(248,81,73,0.3); padding: 8px 14px; font-weight: 600; gap: 0; }
+  .cf-tip.drag-active .cft-name, .cf-tip.drag-locked .cft-name { max-width: 180px; }
+  .cf-tip.drag-active .cft-size, .cf-tip.drag-locked .cft-size,
+  .cf-tip.drag-active .cft-edit, .cf-tip.drag-locked .cft-edit,
+  .cf-tip.drag-active .cft-date, .cf-tip.drag-locked .cft-date { max-width: 0; opacity: 0; padding: 0; margin: 0; }
   .chat-file-link { color: #58a6ff; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; padding: 1px 4px; border-radius: 3px; }
   .chat-file-link:hover { background: rgba(88,166,255,0.1); }
   .chat-drop-active { border-color: #58a6ff !important; background: rgba(88,166,255,0.05) !important; }
@@ -4122,8 +4123,8 @@ function _renderShotFiles(id){
       const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:'';
       const editCell=id==='__admin'?'':_renderEditCell(id,f.name);
       const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:'';
-      const selAttr=!f.locked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
-      const grip=!f.locked?`<span class="f-grip" draggable="true" data-drag-folder="${esc(f.name)}">⠿</span>`:'';
+      const selAttr=(!f.locked||_chatFileMode)?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
+      const grip=(!f.locked||_chatFileMode)?`<span class="f-grip${f.locked?' f-grip-locked':''}" draggable="true" data-drag-folder="${esc(f.name)}"${f.locked?' data-locked="1"':''}>⠿</span>`:'';
       const shareIcon=(id==='__admin'&&f.hasShare)?' 🔗':'';
       const _countFiles=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_countFiles(c.children||[]);else n++;}return n;};
       const _sumBytes=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sumBytes(c.children||[]);else n+=(c._bytes||0);}return n;};
@@ -4146,8 +4147,8 @@ function _renderShotFiles(id){
 
       const fileDelBtn=canDel?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
       const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
-      const selAttr2=!isLocked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
-      const grip2=!isLocked?`<span class="f-grip" draggable="true" data-drag-file="${esc(f.name)}">⠿</span>`:'';
+      const selAttr2=(!isLocked||_chatFileMode)?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
+      const grip2=(!isLocked||_chatFileMode)?`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`:'';
       const fileTip=_buildFileTip(id,f.name,f.size||'',editCell,f.date||'',_fileIcon(f.name));
       html+=`<tr${selAttr2}${fileTip}>
         <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
@@ -4200,11 +4201,14 @@ function _renderShotFiles(id){
       e.stopPropagation();
       const row=grip.closest("tr");
       const name=grip.dataset[dataKey];
+      const isLocked=grip.dataset.locked==='1';
       const isMulti=_fileSelection.size>1&&_fileSelection.has(name);
       if(isMulti){
         e.dataTransfer.setData("text/x-multi-move",JSON.stringify([..._fileSelection]));
       } else {
+        // Locked items: use same data types (for chat drop) but mark as locked
         e.dataTransfer.setData(dataKey==='dragFile'?'text/x-file-move':'text/x-folder-move',name);
+        if(isLocked)e.dataTransfer.setData('text/x-locked','1');
       }
       e.dataTransfer.effectAllowed="copyMove";
       // Hide native drag image
@@ -4217,13 +4221,13 @@ function _renderShotFiles(id){
       if(_chatFileMode){
         _cfDragging=true;
         const tipRow=row.closest('tr[data-tip]');
+        const tipClass=isLocked?'drag-locked':'drag-active';
         if(_cfTipEl){
-          // Instant switch to drag state
-          _cfTipEl.classList.add('drag-active');
+          _cfTipEl.classList.add(tipClass);
           _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
         } else if(tipRow){
           _showCfTipForRow(tipRow,true);
-          if(_cfTipEl){_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
+          if(_cfTipEl){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add(tipClass);_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
         }
         _dragGhost=null;
       } else {
@@ -4289,6 +4293,7 @@ function _renderShotFiles(id){
     row.addEventListener("dragleave",()=>row.classList.remove("f-drop-target"));
     row.addEventListener("drop",e=>{
       e.preventDefault();row.classList.remove("f-drop-target");
+      if(e.dataTransfer.getData('text/x-locked'))return;// locked items can't be moved
       const fileName=e.dataTransfer.getData("text/x-file-move");
       const folderName=e.dataTransfer.getData("text/x-folder-move");
       if(fileName)_moveFile(id,fileName,row.dataset.dropFolder);
