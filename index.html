@@ -127,7 +127,7 @@
   .shot-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
   .shot-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-content: flex-start; align-items: stretch; }
   .files-panel { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; min-height: 0; justify-content: space-between; position: relative; }
-  .upload-queue-panel { width: 300px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+  .upload-queue-panel { width: 300px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; flex-shrink: 0; contain: layout style; }
   .upload-queue-header { padding: 10px 14px; border-bottom: 1px solid #30363d; }
   .upload-queue-header .uq-top { display: flex; align-items: center; gap: 6px; }
   .upload-queue-header .uq-title { flex: 1; font-size: 13px; font-weight: 600; color: #c9d1d9; }
@@ -136,7 +136,7 @@
   .uq-subtitle { display: flex; justify-content: space-between; font-size: 11px; color: #8b949e; margin-top: 4px; }
   .uq-subtitle .uq-cancel { color: #f85149; cursor: pointer; }
   .uq-subtitle .uq-cancel:hover { text-decoration: underline; }
-  .upload-queue-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .upload-queue-list { flex: 1; overflow-y: auto; padding: 4px 0; overscroll-behavior: contain; }
   .uq-item { display: flex; align-items: center; gap: 8px; padding: 5px 14px; font-size: 12px; }
   .uq-item:hover { background: #161b22; }
   .uq-item .uq-icon { flex: 0 0 20px; text-align: center; font-size: 14px; }
@@ -203,8 +203,8 @@
   .files-sel-bar button:hover { background: rgba(255,255,255,0.15); }
   .files-sel-bar button.sel-danger { color: #f85149; }
   .files-sel-bar button.sel-danger:hover { background: rgba(248,81,73,0.15); }
-  .files-table tr.f-locked-sep td { background: transparent; border: hidden !important; padding: 0; }
-  .files-table tr.f-locked-sep hr { border: none; border-top: 1px solid #21262d; margin: 0; }
+  .files-table tr.f-locked-sep td { background: transparent; border: hidden !important; padding: 0; height: 7px; }
+  .files-table tr.f-locked-sep hr { display: none; }
   .files-rect-sel { position: absolute; border: 1px solid rgba(88,166,255,0.5); background: rgba(88,166,255,0.08); pointer-events: none; z-index: 5; }
   .f-drag-ghost { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 9999; background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.08s ease-out; opacity: 0.92; }
   .files-empty { text-align: center; padding: 60px 20px; color: #484f58; }
@@ -946,6 +946,8 @@ function _initRealtime(){
           if(JSON.stringify(remote)!==JSON.stringify(state)){
             state=remote;
             localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+            // Skip heavy re-renders while upload queue is active — causes scroll interruption
+            if(_uploadQueue.processing){return;}
             runMigrations();render();
             if(_gifCurrentId)renderPlayerNotes();
             if(noteTaskId&&noteType==='chat')renderChat();
@@ -3202,6 +3204,10 @@ async function _processQueue(){
   }
   _uploadQueue.processing=false;
   _updateQueueHeader();
+  // Re-render UI that was suppressed during upload (realtime handler skips while processing)
+  render();
+  if(_shotCurrentId&&_shotTab==='files')_renderShotFiles(_shotCurrentId);
+  if(_shotCurrentId&&_shotTab==='versions')_renderShotBody(_shotCurrentId);
 }
 function _commitUploadedFile(item){
   const id=_uploadQueue.shotId;
@@ -3250,8 +3256,18 @@ function _estimateTimeRemaining(){
   if(remaining<60)return Math.ceil(remaining)+'s remaining';
   return Math.ceil(remaining/60)+'m remaining';
 }
-// Batch ALL queue DOM updates into one rAF — never interrupts scroll/clicks
+// Batch ALL queue DOM updates into one rAF — defer item updates while user scrolls
 let _uqDirty=false;
+let _uqScrolling=false,_uqScrollTimer=null;
+function _uqBindScroll(listEl){
+  if(!listEl||listEl._uqScrollBound)return;
+  listEl._uqScrollBound=true;
+  listEl.addEventListener('scroll',()=>{
+    _uqScrolling=true;
+    clearTimeout(_uqScrollTimer);
+    _uqScrollTimer=setTimeout(()=>{_uqScrolling=false;_flushQueueDOM();},150);
+  },{passive:true});
+}
 function _scheduleQueueUpdate(){if(_uqDirty)return;_uqDirty=true;requestAnimationFrame(()=>{_uqDirty=false;_flushQueueDOM();});}
 function _updateQueueItemDOM(){_scheduleQueueUpdate();}
 function _updateQueueHeader(){_scheduleQueueUpdate();}
@@ -3261,14 +3277,17 @@ function _flushQueueDOM(){
   if(!panel)return;
   const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
   const done=active.filter(i=>i.status==='done').length;
-  // Header — textContent only
+  // Header — always update (outside scroll container)
   const titleEl=panel.querySelector('.uq-title');
   if(titleEl){const t=(done===active.length?'Uploaded':'Uploading')+' '+done+'/'+active.length;if(titleEl.textContent!==t)titleEl.textContent=t;}
   const etaEl=panel.querySelector('.uq-eta');
   if(etaEl){const t=_uploadQueue.processing?(_estimateTimeRemaining()||'Uploading...'):'Done';if(etaEl.textContent!==t)etaEl.textContent=t;}
   const subEl=panel.querySelector('.uq-subtitle');
   if(subEl){const d=_uploadQueue.processing?'flex':'none';if(subEl.style.display!==d)subEl.style.display=d;}
-  // Items — only textContent + visibility, no add/remove/innerHTML
+  // Items — skip DOM mutations while user is scrolling (kills trackpad momentum)
+  if(_uqScrolling)return;
+  const listEl=panel.querySelector('.upload-queue-list');
+  _uqBindScroll(listEl);
   for(const item of active){
     const el=panel.querySelector('[data-uq-id="'+item.id+'"]');
     if(!el)continue;
@@ -3322,9 +3341,9 @@ function _renderUploadQueue(){
   }
   html+=`</div>`;
   panel.innerHTML=html;
-  // Restore scroll
+  // Restore scroll + bind scroll guard
   const newList=panel.querySelector(".upload-queue-list");
-  if(newList)newList.scrollTop=scrollTop;
+  if(newList){newList.scrollTop=scrollTop;_uqBindScroll(newList);}
 }
 function _closeUploadQueue(){
   if(_uploadQueue.items.some(i=>i.status==='uploading')){
