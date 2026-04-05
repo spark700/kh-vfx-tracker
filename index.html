@@ -3485,21 +3485,38 @@ async function _deleteSelected(id){
   if(!ok)return;
   const stateKey=_getCurrentStateKey();
   const filesDict=_getFilesDict(id);
+  // Count total R2 deletes for progress bar
+  let totalOps=0;
+  const {items}=_resolveFilesPath(id);
   for(const name of names){
-    // Check if folder
-    const {items}=_resolveFilesPath(id);
     const item=items.find(f=>f.name===name);
     if(item?.type==='folder'&&!item.locked){
-      // Delete folder contents from R2
-      const files=filesDict[name]||[];
-      for(const f of files){if(f.r2key)await r2Delete(f.r2key).catch(()=>{});}
+      const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
       const foldersArr=_getFoldersArray(id);
-      _setFoldersArray(id,foldersArr.filter(f=>f.name!==name));
-      delete filesDict[name];
-      if(id==='__admin'){_ensureAdminState();delete state.__admin.shares[name];}
+      const toDelete=foldersArr.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'));
+      for(const uf of toDelete)totalOps+=(filesDict[uf.name]||[]).length;
+    } else totalOps++;
+  }
+  const panel=totalOps>1?_showOperationProgress('Deleting',totalOps):null;
+  let done=0;
+  for(const name of names){
+    const item=items.find(f=>f.name===name);
+    if(item?.type==='folder'&&!item.locked){
+      const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
+      const foldersArr=_getFoldersArray(id);
+      const toDelete=foldersArr.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'));
+      for(const uf of toDelete){
+        const files=filesDict[uf.name]||[];
+        for(const f of files){
+          if(f.r2key)await r2Delete(f.r2key).catch(()=>{});
+          done++;if(panel)_updateOperationProgress(panel,done,totalOps,f.name||'');
+        }
+        delete filesDict[uf.name];
+      }
+      _setFoldersArray(id,foldersArr.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/')));
+      if(id==='__admin'){_ensureAdminState();delete state.__admin.shares[fullPath];}
       else _addFileHistory(id,'deleted',name,'');
     } else if(!item?.type||item?.type!=='folder'){
-      // Delete file
       if(id!=='__admin'&&stateKey==='versions/preview'){
         const versions=state[id]?.versions||[];
         const idx=versions.findIndex(v=>v.name===name);
@@ -3514,9 +3531,11 @@ async function _deleteSelected(id){
         if(entry?.r2key)await r2Delete(entry.r2key).catch(()=>{});
         if(filesDict[stateKey])filesDict[stateKey]=filesDict[stateKey].filter(f=>f.name!==name);
       }
+      done++;if(panel)_updateOperationProgress(panel,done,totalOps,name);
       if(id!=='__admin')_addFileHistory(id,'deleted',name,stateKey||'');
     }
   }
+  if(panel)_removeOperationProgress(panel);
   _clearSelection();
   saveState(state);
   _renderShotFiles(id);
