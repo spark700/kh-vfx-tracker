@@ -172,7 +172,8 @@
   .files-table .f-grip:active { cursor: grabbing; }
   .files-table .f-grip:hover { color: #8b949e; }
   .files-table tr.f-selectable { user-select: none; }
-  .files-sel-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: #1c2129; border: 1px solid #30363d; border-radius: 6px; font-size: 12px; color: #c9d1d9; position: absolute; top: 44px; right: 12px; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .files-sel-bar { display: none; align-items: center; gap: 8px; font-size: 12px; color: #c9d1d9; margin-right: auto; }
+  .files-sel-bar.active { display: flex; }
   .files-sel-bar .sel-count { color: #58a6ff; font-weight: 600; }
   .files-sel-bar button { background: rgba(255,255,255,0.08); border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .files-sel-bar button:hover { background: rgba(255,255,255,0.15); }
@@ -3040,20 +3041,19 @@ function _updateSelectionUI(id){
   body.querySelectorAll("tr[data-sel-name]").forEach(row=>{
     row.classList.toggle("f-selected",_fileSelection.has(row.dataset.selName));
   });
-  // Selection toolbar (floating)
-  let bar=document.getElementById("filesSelBar");
-  if(_fileSelection.size>0){
-    if(!bar){
-      bar=document.createElement("div");bar.id="filesSelBar";bar.className="files-sel-bar";
-      const panel=body.querySelector(".files-panel");
-      if(panel)panel.appendChild(bar);
+  // Selection toolbar (inline in toolbar)
+  const bar=document.getElementById("filesSelBar");
+  if(bar){
+    if(_fileSelection.size>0){
+      bar.classList.add("active");
+      bar.innerHTML=`<span class="sel-count">${_fileSelection.size} selected</span>`+
+        `<button onclick="_selectAll('${id}')">Select All</button>`+
+        `<button onclick="_clearSelection();_updateSelectionUI('${id}')">Deselect</button>`+
+        `<button class="sel-danger" onclick="_deleteSelected('${id}')">Delete</button>`;
+    } else {
+      bar.classList.remove("active");
+      bar.innerHTML='';
     }
-    bar.innerHTML=`<span class="sel-count">${_fileSelection.size} selected</span>`+
-      `<button onclick="_selectAll('${id}')">Select All</button>`+
-      `<button onclick="_clearSelection();_updateSelectionUI('${id}')">Deselect</button>`+
-      `<button class="sel-danger" onclick="_deleteSelected('${id}')">Delete</button>`;
-  } else if(bar){
-    bar.remove();
   }
 }
 function _selectAll(id){
@@ -3113,6 +3113,7 @@ function _renderShotFiles(id){
   // toolbar
   html+=`<div class="files-toolbar">`;
   html+=`<span class="files-path">📁 ${esc(breadcrumb)}</span>`;
+  html+=`<div class="files-sel-bar" id="filesSelBar"></div>`;
   if(canMkdir) html+=`<button class="files-btn" onclick="_showNewFolderInput('${id}')">📁+ New Folder</button>`;
   html+=`<button class="files-btn" onclick="_downloadAllFiles('${id}')" title="Download all files"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`;
   html+=`</div>`;
