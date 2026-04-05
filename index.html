@@ -3039,7 +3039,7 @@ function _renderShotFiles(id){
       </tr>`;
     } else {
       const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
-      const fileDelBtn=(!isLocked&&canUp)?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
+      const fileDelBtn=canUp?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
       const editCell=_renderEditCell(id,f.name);
       html+=`<tr>
         <td><span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
