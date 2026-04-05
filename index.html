@@ -180,6 +180,7 @@
   .files-sel-bar button.sel-danger:hover { background: rgba(248,81,73,0.15); }
   .files-table tr.f-locked-sep td { border-bottom: 2px solid #21262d; }
   .files-rect-sel { position: absolute; border: 1px solid rgba(88,166,255,0.5); background: rgba(88,166,255,0.08); pointer-events: none; z-index: 5; }
+  .f-drag-ghost { position: fixed; pointer-events: none; z-index: 9999; background: #1c2129; border: 1px solid #58a6ff; border-radius: 6px; padding: 6px 14px; font-size: 13px; color: #c9d1d9; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.05s ease-out; white-space: nowrap; }
   .files-empty { text-align: center; padding: 60px 20px; color: #484f58; }
   .files-empty-icon { font-size: 48px; margin-bottom: 12px; }
   .files-new-folder { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
@@ -3186,33 +3187,42 @@ function _renderShotFiles(id){
     });
   }
   // Internal drag & drop: file/folder → folder
+  let _dragGhost=null;
   function _setupGripDrag(grip,dataKey){
     grip.addEventListener("dragstart",e=>{
       e.stopPropagation();
       const row=grip.closest("tr");
       const name=grip.dataset[dataKey];
-      if(_fileSelection.size>1&&_fileSelection.has(name)){
+      const isMulti=_fileSelection.size>1&&_fileSelection.has(name);
+      if(isMulti){
         e.dataTransfer.setData("text/x-multi-move",JSON.stringify([..._fileSelection]));
-        // Custom drag image showing count
-        const badge=document.createElement("div");
-        badge.textContent=_fileSelection.size+" items";
-        badge.style.cssText="background:#1f6feb;color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;position:fixed;top:-100px";
-        document.body.appendChild(badge);
-        e.dataTransfer.setDragImage(badge,40,16);
-        setTimeout(()=>badge.remove(),0);
       } else {
         e.dataTransfer.setData(dataKey==='dragFile'?'text/x-file-move':'text/x-folder-move',name);
-        // Use row as drag image
-        e.dataTransfer.setDragImage(row,40,row.offsetHeight/2);
       }
       e.dataTransfer.effectAllowed="move";
+      // Hide native drag image
+      const blank=document.createElement("canvas");blank.width=1;blank.height=1;
+      e.dataTransfer.setDragImage(blank,0,0);
+      // Show custom ghost
+      _dragGhost=document.createElement("div");
+      _dragGhost.className="f-drag-ghost";
+      const icon=dataKey==='dragFile'?'📄':'📁';
+      _dragGhost.innerHTML=isMulti?`${_fileSelection.size} items`:`${icon} ${name}`;
+      _dragGhost.style.left=e.clientX+12+"px";
+      _dragGhost.style.top=e.clientY-12+"px";
+      document.body.appendChild(_dragGhost);
       row.classList.add("f-dragging");
-      if(_fileSelection.size>1&&_fileSelection.has(name)){
-        body.querySelectorAll("tr.f-selected").forEach(r=>r.classList.add("f-dragging"));
+      if(isMulti) body.querySelectorAll("tr.f-selected").forEach(r=>r.classList.add("f-dragging"));
+    });
+    grip.addEventListener("drag",e=>{
+      if(_dragGhost&&e.clientX>0){
+        _dragGhost.style.left=e.clientX+12+"px";
+        _dragGhost.style.top=e.clientY-12+"px";
       }
     });
     grip.addEventListener("dragend",()=>{
       body.querySelectorAll("tr.f-dragging").forEach(r=>r.classList.remove("f-dragging"));
+      if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
     });
   }
   body.querySelectorAll(".f-grip[data-drag-file]").forEach(g=>_setupGripDrag(g,'dragFile'));
@@ -3279,9 +3289,10 @@ function _renderShotFiles(id){
       }
     });
   });
-  // Click on table header or empty area = deselect
-  body.querySelector(".files-table thead")?.addEventListener("click",()=>{_clearSelection();_updateSelectionUI(id);});
+  // Click on table header or empty area = deselect (skip after rect-select)
+  body.querySelector(".files-table thead")?.addEventListener("click",()=>{if(_skipClick)return;_clearSelection();_updateSelectionUI(id);});
   body.querySelector(".files-table-wrap")?.addEventListener("click",e=>{
+    if(_skipClick)return;
     if(e.target.closest("tr:not(thead tr)"))return;
     _clearSelection();_updateSelectionUI(id);
   });
@@ -3327,7 +3338,7 @@ function _renderShotFiles(id){
         document.removeEventListener("mousemove",onMove);
         document.removeEventListener("mouseup",onUp);
         if(rectEl){rectEl.remove();rectEl=null;}
-        if(isRect){_updateSelectionUI(id);_skipClick=true;setTimeout(()=>_skipClick=false,50);}
+        if(isRect){_updateSelectionUI(id);_skipClick=true;setTimeout(()=>_skipClick=false,200);}
         isRect=false;
       };
       document.addEventListener("mousemove",onMove);
