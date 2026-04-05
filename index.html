@@ -2505,60 +2505,19 @@ function scrollToMsg(mid){
   if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.style.outline="1px solid #484f58";setTimeout(()=>el.style.outline="",1500);}
 }
 
-function closeNote(){document.getElementById("noteOverlay").classList.add("hidden");document.getElementById("chatFilesPanel").style.display='none';_chatFilesId=null;noteTaskId=null;noteType=null;replyToId=null;editingMsgId=null;todoMode=false;}
+function closeNote(){document.getElementById("noteOverlay").classList.add("hidden");document.getElementById("chatFilesPanel").style.display='none';_closeChatFiles();noteTaskId=null;noteType=null;replyToId=null;editingMsgId=null;todoMode=false;}
 
-let _chatFilesId=null;
-let _chatFilesPath=[];
+let _savedShotId=null,_savedFilesPath=null,_savedShotTab=null;
 function _renderChatFiles(shotId){
-  _chatFilesId=shotId;
-  _chatFilesPath=[];
-  _renderChatFilesInner();
+  _savedShotId=_shotCurrentId;_savedFilesPath=[..._filesPath];_savedShotTab=_shotTab;
+  _shotCurrentId=shotId;_filesPath=[];_shotTab='files';
+  _chatFileMode=true;
+  _renderShotFiles(shotId);
 }
-function _renderChatFilesInner(){
-  const body=document.getElementById("chatFilesBody");
-  if(!body||!_chatFilesId)return;
-  const id=_chatFilesId;
-  const items=_getFilesRootForChat(id,_chatFilesPath);
-  const breadcrumb=_chatFilesPath.length?id+' / '+_chatFilesPath.join(' / '):id;
-  const canUp=_canUpload(id);
-  let html=`<div class="files-panel">`;
-  html+=`<div class="files-toolbar"><span class="files-path">📁 ${esc(breadcrumb)}</span></div>`;
-  html+=`<div class="files-table-wrap"><table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th></th></tr></thead><tbody>`;
-  if(_chatFilesPath.length>0){
-    html+=`<tr style="cursor:pointer" onclick="_chatFilesPath.pop();_renderChatFilesInner()"><td><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td></tr>`;
-  }
-  const _cfCountFiles=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_cfCountFiles(c.children||[]);else n++;}return n;};
-  const _cfSumBytes=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_cfSumBytes(c.children||[]);else n+=(c._bytes||0);}return n;};
-  for(const f of items){
-    if(f.type==='folder'){
-      const fc=_cfCountFiles(f.children||[]);
-      const fb=_cfSumBytes(f.children||[]);
-      html+=`<tr style="cursor:pointer" ondblclick="_chatFilesPath.push('${esc(f.name)}');_renderChatFilesInner()"><td><span class="f-icon">📁</span>${esc(f.name)}${f.locked?' 🔒':''}</td><td class="f-size">${fc||''}</td><td class="f-size">${fb?_formatSize(fb):''}</td><td class="f-actions"><button class="f-dl" onclick="event.stopPropagation();_chatDownloadFolder('${esc(f.name)}')" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button></td></tr>`;
-    } else {
-      const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
-      html+=`<tr><td><span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td><td class="f-size"></td><td class="f-size">${f.size||''}</td><td class="f-actions">${dlBtn}</td></tr>`;
-    }
-  }
-  html+=`</tbody></table>`;
-  if(items.length===0)html+=`<div class="files-empty" style="padding:20px"><div class="files-empty-icon">📂</div><div>No files</div></div>`;
-  html+=`</div></div>`;
-  body.innerHTML=html;
-}
-function _getFilesRootForChat(id,path){
-  let items=_getFilesRoot(id);
-  for(const p of path){
-    const folder=items.find(f=>f.name===p&&f.type==='folder');
-    if(folder){items=folder.children||[];}else break;
-  }
-  return items;
-}
-function _chatDownloadFolder(name){
-  if(!_chatFilesId)return;
-  const items=_getFilesRootForChat(_chatFilesId,_chatFilesPath);
-  const folder=items.find(f=>f.name===name&&f.type==='folder');
-  if(!folder||!folder.children)return;
-  const files=_collectFileUrlsWithPath(folder.children,'');
-  _downloadAsZip(files,_chatFilesId+'_'+name);
+function _closeChatFiles(){
+  _chatFileMode=false;
+  if(_savedShotId!==null){_shotCurrentId=_savedShotId;_filesPath=_savedFilesPath||[];_shotTab=_savedShotTab||'versions';}
+  _savedShotId=null;_savedFilesPath=null;_savedShotTab=null;
 }
 function _toggleChatFiles(){
   const panel=document.getElementById("chatFilesPanel");
@@ -3849,9 +3808,10 @@ function _closeUploadQueue(){
 }
 function _toggleQueueCollapse(){_uploadQueue.collapsed=!_uploadQueue.collapsed;_renderUploadQueue();}
 
+let _chatFileMode=false;
 function _renderShotFiles(id){
   _clearSelection();
-  const body=document.getElementById("shotBody");
+  const body=_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody");
   const {items,breadcrumb,currentFolder}=_resolveFilesPath(id);
   const inSource=_filesPath.length>0&&_filesPath[0]==='source';
   const isLocked=currentFolder?.locked||inSource;
