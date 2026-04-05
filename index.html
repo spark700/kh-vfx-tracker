@@ -3513,7 +3513,7 @@ function _rangeSelect(id,name){
   _lastClickedItem=name;
 }
 function _updateSelectionUI(id){
-  const body=document.getElementById("shotBody");
+  const body=_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody");
   if(!body)return;
   body.querySelectorAll("tr[data-sel-name]").forEach(row=>{
     row.classList.toggle("f-selected",_fileSelection.has(row.dataset.selName));
