@@ -2225,10 +2225,23 @@ function _navigateChatFile(path){
   },50);
 }
 function renderMsgContent(text, mid) {
+  // Handle file cards/links BEFORE escaping (they contain raw paths)
+  if(text.includes('[[filecard:'))return `<div>${text.replace(/\[\[filecard:([^\]]+)\]\]/g,(m,p)=>_renderFileCard(p))}</div>`;
   // Check if message contains todo items: lines starting with - [ ] or - [x]
   const lines = text.split('\n');
   const hasTodo = lines.some(l => /^\s*-\s*\[([ xX])\]/.test(l));
-  if (!hasTodo) return _renderFileLinks(`<div>${esc(text)}</div>`);
+  if (!hasTodo){
+    // Extract [[file:...]] before escaping, replace with placeholders
+    const fileLinks=[];
+    let safe=text.replace(/\[\[file:([^\]]+)\]\]/g,(m,p)=>{fileLinks.push(p);return `__FLINK${fileLinks.length-1}__`;});
+    let html=`<div>${esc(safe)}</div>`;
+    fileLinks.forEach((p,i)=>{
+      const name=p.includes('/')?p.split('/').pop():p;
+      const icon=p.endsWith('/')||!name.includes('.')?'📁':'📄';
+      html=html.replace(`__FLINK${i}__`,`<span class="chat-file-link" onclick="_navigateChatFile('${esc(p)}')" title="${esc(p)}">${icon} ${esc(name)}</span>`);
+    });
+    return html;
+  }
 
   let html = '<ul class="chat-todo">';
   let lineIdx = 0;
