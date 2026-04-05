@@ -3813,6 +3813,13 @@ function _closeUploadQueue(){
 }
 function _toggleQueueCollapse(){_uploadQueue.collapsed=!_uploadQueue.collapsed;_renderUploadQueue();}
 
+function _buildFileTip(id,name,extra){
+  let tip=name;
+  const last=_lastEdit(id,name);
+  if(last)tip+='\n'+last.action+' by '+last.user+(last.ts?' • '+last.ts:'');
+  else if(extra)tip+='\n'+extra;
+  return ` title="${esc(tip)}"`;
+}
 let _chatFileMode=false;
 function _renderShotFiles(id){
   _clearSelection();
@@ -3863,8 +3870,9 @@ function _renderShotFiles(id){
       const fileCount=_countFiles(f.children||[]);
       const folderBytes=_sumBytes(f.children||[]);
       const folderSize=folderBytes?_formatSize(folderBytes):'';
+      const folderTip=_chatFileMode?_buildFileTip(id,f.name,fileCount+' files'+(folderSize?', '+folderSize:'')):'';
       html+=`<tr${dropAttr}${selAttr}>
-        <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}${shareIcon}</td>
+        <td class="f-name" data-nav-folder="${esc(f.name)}"${folderTip}>${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}${shareIcon}</td>
         <td class="f-size">${fileCount||''}</td>
         <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
@@ -3878,8 +3886,9 @@ function _renderShotFiles(id){
       const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
       const selAttr2=!isLocked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       const grip2=!isLocked?`<span class="f-grip" draggable="true" data-drag-file="${esc(f.name)}">⠿</span>`:'';
+      const fileTip=_chatFileMode?_buildFileTip(id,f.name,(f.size||'')+(f.date?' • '+f.date:'')):'';
       html+=`<tr${selAttr2}>
-        <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
+        <td${fileTip}>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
         <td class="f-size"></td>
         <td class="f-size">${f.size||''}</td>
         <td class="f-edit">${editCell}</td>
