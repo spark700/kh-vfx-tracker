@@ -776,6 +776,7 @@
     <div class="stat-card"><div class="num blue" id="stat-review">0</div><div class="label">REVIEW</div></div>
     <div class="stat-card"><div class="num green" id="stat-done">0</div><div class="label">DONE</div></div>
   </div>
+  <button id="myFilesBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;align-self:center" onclick="openMyFiles()">📁 My Files</button>
   <div id="artistStats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
 </div>
 
@@ -833,6 +834,8 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   _loadEditMode();
   _buildArtistFilterBtns();
   _initGifs();
+  const mfb=document.getElementById("myFilesBtn");
+  if(mfb)mfb.style.display=isGuest()?'none':'block';
   render();
 }
 function logout(){sessionStorage.removeItem("kh_user");currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
@@ -1284,6 +1287,9 @@ function _loadEditMode(){
 }
 function isEditMode(){return _editMode;}
 
+function openMyFiles(){
+  // TODO: open personal file browser for current user
+}
 function openAddShotDialog(){
   if(!isEditMode()||!isAdmin())return;
   const catOpts=getAllCatKeys().map(k=>`<option value="${k}">${esc(getCatLabel(k))}</option>`).join('');
