@@ -444,7 +444,11 @@
   .chat-files-body .files-drop { padding: 16px; font-size: 11px; min-height: 40px; }
   .chat-files-body .f-grip { font-size: 14px; width: 18px; padding-right: 4px; }
   .cf-tip { position: fixed; z-index: 9999; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c9d1d9; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-width: 90vw; transition: border-color 0.3s, box-shadow 0.3s; }
-  .cf-tip.drag-active { border-color: #58a6ff; box-shadow: 0 4px 16px rgba(88,166,255,0.3); }
+  .cf-tip.drag-active { border-color: #58a6ff; box-shadow: 0 4px 16px rgba(88,166,255,0.3); max-width: 200px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+  .cf-tip.drag-active .cft-size,
+  .cf-tip.drag-active .cft-edit,
+  .cf-tip.drag-active .cft-date { display: none; }
+  .cf-tip.drag-active .cft-name { overflow: hidden; text-overflow: ellipsis; }
   .cf-tip .cft-icon { flex-shrink: 0; }
   .cf-tip .cft-name { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
   .cf-tip .cft-size { color: #8b949e; font-family: 'SF Mono', monospace; font-size: 11px; flex-shrink: 0; }
