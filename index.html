@@ -115,6 +115,7 @@
   .shot-overlay.hidden { display: none; }
   .shot-panel { width: 90vw; max-width: 1200px; max-height: 90vh; background: #161b22; border: 1px solid #30363d; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
   .shot-panel.files-mode { height: 90vh; max-width: 900px; }
+  .shot-panel.files-mode .shot-body { align-content: stretch; flex-wrap: nowrap; flex-direction: column; }
   .shot-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px; }
   .shot-header-id { font-family: 'SF Mono', monospace; font-size: 18px; color: #58a6ff; font-weight: 600; }
   .shot-header-desc { color: #8b949e; font-size: 14px; flex: 1; }
@@ -126,7 +127,7 @@
   .shot-tab:hover { color: #c9d1d9; }
   .shot-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
   .shot-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-content: flex-start; align-items: stretch; }
-  .files-panel { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; min-height: 0; justify-content: space-between; position: relative; }
+  .files-panel { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; min-height: 0; position: relative; }
   .upload-queue-panel { width: 300px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: hidden; flex-shrink: 0; contain: layout style; }
   .upload-queue-header { padding: 10px 14px; border-bottom: 1px solid #30363d; }
   .upload-queue-header .uq-top { display: flex; align-items: center; gap: 6px; }
@@ -185,14 +186,14 @@
   .f-edit-tooltip-row .f-edit-action { font-size: 9px; }
   .f-edit-tooltip-time { color: #484f58; font-family: 'SF Mono', monospace; font-size: 10px; margin-left: auto; }
   .f-edit-tooltip-title { padding: 4px 12px 6px; font-size: 10px; color: #484f58; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid #21262d; margin-bottom: 2px; }
-  .files-drop { border: 2px dashed #30363d; border-radius: 8px; padding: 30px; text-align: center; color: #484f58; font-size: 13px; cursor: pointer; transition: .15s; }
+  .files-drop { border: 2px dashed #30363d; border-radius: 8px; padding: 30px; text-align: center; color: #484f58; font-size: 13px; cursor: pointer; transition: .15s; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 60px; }
   .files-drop:hover { border-color: #3fb950; color: #3fb950; }
   .files-drop.drag-over { border-color: #3fb950; color: #3fb950; background: rgba(63,185,80,0.05); }
   .files-table tr.f-dragging { opacity: 0.4; }
   .files-table tr.f-drop-target td { background: rgba(63,185,80,0.12) !important; }
   .files-table tr.f-selected td { background: rgba(88,166,255,0.1) !important; }
   .files-table tr.f-selected td:first-child { box-shadow: inset 3px 0 0 #58a6ff; }
-  .files-table .f-grip { cursor: grab; color: #30363d; font-size: 10px; letter-spacing: 1px; padding-right: 4px; display: inline-block; width: 14px; vertical-align: middle; }
+  .files-table .f-grip { cursor: grab; color: #30363d; font-size: 20px; letter-spacing: 2px; padding-right: 8px; display: inline-block; width: 24px; vertical-align: middle; }
   .files-table .f-grip:active { cursor: grabbing; }
   .files-table .f-grip:hover { color: #8b949e; }
   .files-table tr.f-selectable { user-select: none; }
@@ -203,8 +204,13 @@
   .files-sel-bar button:hover { background: rgba(255,255,255,0.15); }
   .files-sel-bar button.sel-danger { color: #f85149; }
   .files-sel-bar button.sel-danger:hover { background: rgba(248,81,73,0.15); }
-  .files-table tr.f-locked-sep td { background: transparent; border: hidden !important; padding: 0; height: 7px; }
-  .files-table tr.f-locked-sep hr { display: none; }
+  .files-table tr.f-locked-sep { display: none; }
+  .transcode-progress { position: fixed; bottom: 24px; right: 24px; width: 300px; background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; z-index: 9999; }
+  .tp-title { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; }
+  .tp-file { font-size: 11px; color: #8b949e; margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tp-bar-wrap { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .tp-bar { height: 100%; background: #1f6feb; border-radius: 3px; transition: width .2s; }
+  .tp-pct { font-size: 11px; color: #8b949e; margin-top: 6px; text-align: right; font-family: 'SF Mono', monospace; }
   .files-rect-sel { position: absolute; border: 1px solid rgba(88,166,255,0.5); background: rgba(88,166,255,0.08); pointer-events: none; z-index: 5; }
   .f-drag-ghost { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 9999; background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.08s ease-out; opacity: 0.92; }
   .files-empty { text-align: center; padding: 60px 20px; color: #484f58; }
@@ -500,6 +506,28 @@
   .save-notice.show { opacity: 1; }
   .export-btn { background: #238636; border: 1px solid #2ea043; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-left: auto; }
   .export-btn:hover { background: #2ea043; }
+
+  /* Admin Files */
+  .af-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2500; display: flex; align-items: flex-start; justify-content: center; gap: 12px; padding-top: 5vh; }
+  .af-panel { width: 90vw; max-width: 900px; height: 90vh; background: #161b22; border: 1px solid #30363d; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+  .af-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px; }
+  .af-header h3 { margin: 0; color: #f0f6fc; font-size: 18px; flex: 1; }
+  .af-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .af-share-row { display: flex; align-items: center; gap: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; }
+  .af-share-row code { flex: 1; font-family: 'SF Mono', monospace; font-size: 12px; color: #3fb950; word-break: break-all; }
+  .af-share-row button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .af-share-row button:hover { background: #30363d; }
+  .af-share-row button.copied { border-color: #3fb950; color: #3fb950; }
+  /* Public upload page */
+  .pub-upload-wrap { max-width: 600px; margin: 60px auto; text-align: center; }
+  .pub-upload-wrap h2 { color: #f0f6fc; font-size: 22px; margin-bottom: 6px; }
+  .pub-upload-wrap .pub-folder { color: #58a6ff; font-family: 'SF Mono', monospace; font-size: 14px; margin-bottom: 20px; }
+  .pub-upload-wrap .pub-status { color: #8b949e; font-size: 13px; margin-top: 12px; min-height: 20px; }
+  .pub-upload-list { text-align: left; margin-top: 16px; }
+  .pub-upload-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: #c9d1d9; border-bottom: 1px solid #21262d; }
+  .pub-upload-item .pub-icon { font-size: 14px; flex-shrink: 0; }
+  .pub-upload-item .pub-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pub-upload-item .pub-pct { font-family: 'SF Mono', monospace; font-size: 11px; color: #8b949e; }
 </style>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="ffmpeg/ffmpeg.js"></script>
@@ -974,7 +1002,8 @@ function runMigrations(){let c=false;for(const[k,d]of Object.entries(state)){
 runMigrations();
 if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}
 _loadCustomCats();
-_initAuth();
+let _pubUploadMode=false;
+if(!_checkPublicUpload()) _initAuth();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
 function getStatus(id){return state[id]?.status||"todo";}
@@ -1029,11 +1058,354 @@ function toggleAdminMenu(){
   if(old){old.remove();return;}
   const dd=document.createElement("div");
   dd.className="admin-menu";dd.id="adminMenu";
-  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();openUserManager()">👥 Manage Users</div>`;
+  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();openUserManager()">👥 Manage Users</div><div class="admin-menu-item" onclick="closeAdminMenu();_openAdminFiles()">📁 Admin Files</div>`;
   document.body.appendChild(dd);
   setTimeout(()=>document.addEventListener("click",closeAdminMenu,{once:true}),0);
 }
 function closeAdminMenu(){const d=document.getElementById("adminMenu");if(d)d.remove();}
+
+// === ADMIN FILES ===
+let _afPath=[];// breadcrumb path for admin files browser
+function _ensureAdminState(){
+  if(!state.__admin)state.__admin={};
+  if(!state.__admin.folders)state.__admin.folders=[];
+  if(!state.__admin.files)state.__admin.files={};
+  if(!state.__admin.shares)state.__admin.shares={};
+}
+function _openAdminFiles(){
+  if(!isAdmin())return;
+  _afPath=[];
+  const ov=document.createElement("div");
+  ov.className="af-overlay";ov.id="afOverlay";
+  ov.onclick=(e)=>{if(e.target===ov)_closeAdminFiles();};
+  ov.innerHTML=`<div class="af-panel"><div class="af-header"><h3>📁 Admin Files</h3><button class="shot-close" onclick="_closeAdminFiles()">&times;</button></div><div class="af-body" id="afBody"></div></div>`;
+  document.body.appendChild(ov);
+  document.addEventListener("keydown",_afEscHandler);
+  _renderAdminFiles();
+}
+function _afEscHandler(e){if(e.key==='Escape'){e.stopPropagation();_closeAdminFiles();}}
+function _closeAdminFiles(){
+  const ov=document.getElementById("afOverlay");if(ov)ov.remove();
+  document.removeEventListener("keydown",_afEscHandler);
+}
+function _afCurrentStateKey(){return _afPath.length===0?'_root':_afPath.join('/');}
+function _afCurrentR2Folder(){return _afPath.length===0?'admin':'admin/'+_afPath.join('/');}
+function _afBuildTree(prefix){
+  _ensureAdminState();
+  const result=[];const seen=new Set();
+  for(const uf of state.__admin.folders){
+    let relName;
+    if(prefix===''){if(uf.name.includes('/'))continue;relName=uf.name;}
+    else{if(!uf.name.startsWith(prefix+'/'))continue;relName=uf.name.substring(prefix.length+1);if(relName.includes('/'))continue;}
+    if(seen.has(relName))continue;seen.add(relName);
+    const fullPath=prefix?prefix+'/'+relName:relName;
+    const files=(state.__admin.files[fullPath]||[]).map(f=>({name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
+    const subFolders=_afBuildTree(fullPath);
+    const hasShare=!!state.__admin.shares[fullPath];
+    result.push({name:relName,type:'folder',children:files.concat(subFolders),fullPath,hasShare});
+  }
+  return result;
+}
+function _afGetItems(){
+  _ensureAdminState();
+  const prefix=_afPath.join('/');
+  const folders=_afBuildTree(prefix);
+  const stateKey=_afCurrentStateKey();
+  const rootFiles=(state.__admin.files[stateKey]||[]).map(f=>({name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
+  return folders.concat(rootFiles);
+}
+function _renderAdminFiles(){
+  const body=document.getElementById("afBody");if(!body)return;
+  _ensureAdminState();
+  const items=_afGetItems();
+  const breadcrumb='admin'+((_afPath.length>0)?(' / '+_afPath.join(' / ')):'');
+  let html=`<div class="files-panel">`;
+  // toolbar
+  html+=`<div class="files-toolbar"><span class="files-path">📁 ${esc(breadcrumb)}</span>`;
+  html+=`<button class="files-btn" onclick="_afShowNewFolder()">📁+ New Folder</button>`;
+  html+=`<button class="files-btn" onclick="_afDownloadAll()" title="Download all"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`;
+  html+=`</div>`;
+  // new folder input
+  html+=`<div class="files-new-folder" id="afNewFolderRow" style="display:none"><span>📁</span><input id="afNewFolderName" placeholder="Folder name..." onkeydown="if(event.key==='Enter')_adminCreateFolder();if(event.key==='Escape')document.getElementById('afNewFolderRow').style.display='none'"><button onclick="_adminCreateFolder()">Create</button><button class="cancel" onclick="document.getElementById('afNewFolderRow').style.display='none'">✕</button></div>`;
+  // table
+  html+=`<div class="files-table-wrap"><table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>Author</th><th>Date</th><th></th></tr></thead><tbody>`;
+  if(_afPath.length>0){
+    html+=`<tr class="af-nav-up" style="cursor:pointer"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+  }
+  for(const f of items){
+    if(f.type==='folder'){
+      const _countF=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_countF(c.children||[]);else n++;}return n;};
+      const _sumB=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sumB(c.children||[]);else n+=(c._bytes||0);}return n;};
+      const fc=_countF(f.children||[]),fb=_sumB(f.children||[]);
+      const shareIcon=f.hasShare?'🔗':'';
+      html+=`<tr data-af-folder="${esc(f.name)}"><td class="f-name"><span class="f-icon">📁</span>${esc(f.name)} ${shareIcon}</td><td class="f-size">${fc||''}</td><td class="f-size">${fb?_formatSize(fb):''}</td><td></td><td></td><td class="f-actions"><button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">🔗</button><button class="f-dl" onclick="event.stopPropagation();_adminDownloadFolder('${esc(f.name)}')" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button><button class="f-dl" onclick="event.stopPropagation();_adminDeleteFolder('${esc(f.name)}')" title="Delete">🗑</button></td></tr>`;
+    } else {
+      const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
+      html+=`<tr><td><span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td><td class="f-size"></td><td class="f-size">${f.size||''}</td><td class="f-size">${esc(f.author||'')}</td><td class="f-date">${f.date||''}</td><td class="f-actions">${dlBtn}<button class="f-dl" onclick="event.stopPropagation();_adminDeleteFile('${esc(f.name)}')" title="Delete">🗑</button></td></tr>`;
+    }
+  }
+  html+=`</tbody></table>`;
+  if(items.length===0) html+=`<div class="files-empty"><div class="files-empty-icon">📂</div><div>No files</div></div>`;
+  html+=`</div>`;
+  // drop zone
+  html+=`<div class="files-drop" id="afDropZone" onclick="document.getElementById('afUploadInput').click()">Drop files here or click to upload</div>`;
+  html+=`<input type="file" id="afUploadInput" multiple style="display:none" onchange="_adminUpload(this.files);this.value=''">`;
+  html+=`</div>`;
+  body.innerHTML=html;
+  // Bind events
+  const dz=document.getElementById("afDropZone");
+  if(dz){
+    dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
+    dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
+    dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");_adminUpload(e.dataTransfer.files);});
+  }
+  body.querySelectorAll("tr.af-nav-up").forEach(r=>r.addEventListener("dblclick",()=>{_afPath.pop();_renderAdminFiles();}));
+  body.querySelectorAll("tr[data-af-folder]").forEach(r=>{
+    r.style.cursor="pointer";
+    r.addEventListener("dblclick",e=>{if(e.target.closest("button,a"))return;_afPath.push(r.dataset.afFolder);_renderAdminFiles();});
+  });
+}
+function _afShowNewFolder(){const r=document.getElementById("afNewFolderRow");if(r){r.style.display="flex";document.getElementById("afNewFolderName").focus();}}
+function _adminCreateFolder(){
+  const input=document.getElementById("afNewFolderName");
+  const name=(input?.value||'').trim().replace(/[\/\\<>:"|?*]/g,'');
+  if(!name)return;
+  _ensureAdminState();
+  const fullPath=_afPath.length===0?name:_afPath.join('/')+'/'+name;
+  if(state.__admin.folders.some(f=>f.name===fullPath))return;
+  state.__admin.folders.push({name:fullPath});
+  saveState(state);_renderAdminFiles();
+}
+async function _adminDeleteFolder(name){
+  _ensureAdminState();
+  const fullPath=_afPath.length===0?name:_afPath.join('/')+'/'+name;
+  const ok=await _showConfirm('Delete folder?','Delete <b>'+esc(name)+'</b> and all files inside?');
+  if(!ok)return;
+  const toDelete=state.__admin.folders.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'));
+  for(const uf of toDelete){
+    const files=state.__admin.files[uf.name]||[];
+    for(const f of files){if(f.r2key)await r2Delete(f.r2key).catch(()=>{});}
+    delete state.__admin.files[uf.name];
+  }
+  state.__admin.folders=state.__admin.folders.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/'));
+  // Also delete root files if deleting from root
+  delete state.__admin.shares[fullPath];
+  saveState(state);_renderAdminFiles();
+}
+async function _adminDeleteFile(fileName){
+  _ensureAdminState();
+  const stateKey=_afCurrentStateKey();
+  const ok=await _showConfirm('Delete file?','Delete <b>'+esc(fileName)+'</b>?');
+  if(!ok)return;
+  const fileEntry=(state.__admin.files[stateKey]||[]).find(f=>f.name===fileName);
+  if(fileEntry?.r2key)await r2Delete(fileEntry.r2key).catch(()=>{});
+  if(state.__admin.files[stateKey])state.__admin.files[stateKey]=state.__admin.files[stateKey].filter(f=>f.name!==fileName);
+  saveState(state);_renderAdminFiles();
+}
+async function _adminUpload(fileList){
+  if(!fileList||!fileList.length)return;
+  _ensureAdminState();
+  const stateKey=_afCurrentStateKey();
+  const r2Folder=_afCurrentR2Folder();
+  if(!state.__admin.files[stateKey])state.__admin.files[stateKey]=[];
+  const files=Array.from(fileList);
+  const queue=[];
+  for(const file of files){
+    if(state.__admin.files[stateKey].some(f=>f.name===file.name)){continue;}
+    queue.push({file,r2Key:r2Folder+'/'+file.name,stateKey,meta:{afUpload:true}});
+  }
+  if(!queue.length)return;
+  // Use enqueue system — but we need a special shotId for admin files
+  // We'll use '__admin' as the shotId for the queue
+  _afEnqueueFiles(queue);
+}
+function _afEnqueueFiles(validatedList){
+  if(_uploadQueue.shotId&&_uploadQueue.shotId!=='__admin'){
+    _uploadQueue.items=[];_uploadQueue.processing=false;
+  }
+  _uploadQueue.shotId='__admin';
+  for(const v of validatedList){
+    _uploadQueue.items.push({
+      id:Date.now()+'-'+Math.random().toString(36).substr(2,6),
+      file:v.file,r2Key:v.r2Key,stateKey:v.stateKey,
+      fileName:v.file.name,size:v.file.size,
+      status:'pending',progress:0,abort:null,startTime:null,
+      meta:v.meta||{}
+    });
+  }
+  _renderAfUploadQueue();
+  if(!_uploadQueue.processing)_afProcessQueue();
+}
+async function _afProcessQueue(){
+  _uploadQueue.processing=true;
+  while(true){
+    const next=_uploadQueue.items.find(i=>i.status==='pending');
+    if(!next)break;
+    next.status='uploading';next.startTime=Date.now();
+    _renderAfUploadQueue();
+    const {promise,abort}=r2UploadXHRAbortable(next.r2Key,next.file,(pct)=>{next.progress=pct;_renderAfUploadQueue();});
+    next.abort=abort;
+    const ok=await promise;
+    if(next.status==='cancelled')continue;
+    next.status=ok?'done':'failed';
+    if(ok){
+      _ensureAdminState();
+      const sk=next.stateKey;
+      if(!state.__admin.files[sk])state.__admin.files[sk]=[];
+      state.__admin.files[sk].push({
+        name:next.fileName,size:next.size,r2key:next.r2Key,
+        author:currentUser?.display||currentUser?.id||'unknown',
+        date:new Date().toISOString().slice(0,10)
+      });
+      saveState(state);
+    }
+    _renderAfUploadQueue();
+  }
+  _uploadQueue.processing=false;
+  _renderAdminFiles();
+}
+function _renderAfUploadQueue(){
+  const body=document.getElementById("afBody");if(!body)return;
+  let panel=document.getElementById("afQueuePanel");
+  const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
+  if(active.length===0){if(panel)panel.remove();return;}
+  if(!panel){panel=document.createElement("div");panel.id="afQueuePanel";panel.className="upload-queue-panel";panel.style.cssText="position:fixed;bottom:24px;right:24px;z-index:3000;width:300px";document.body.appendChild(panel);}
+  const done=active.filter(i=>i.status==='done').length;
+  let html=`<div class="upload-queue-header"><div class="uq-top"><span class="uq-title">${done===active.length?'Uploaded':'Uploading'} ${done}/${active.length}</span><button class="uq-btn" onclick="document.getElementById('afQueuePanel')?.remove()">✕</button></div></div><div class="upload-queue-list">`;
+  for(const item of active){
+    let icon;
+    if(item.status==='done')icon='✅';else if(item.status==='uploading')icon='◌';else if(item.status==='failed')icon='❌';else icon='⭕';
+    html+=`<div class="uq-item"><span class="uq-icon">${icon}</span><span class="uq-name" title="${esc(item.fileName)}">${esc(item.fileName)}</span><span class="uq-pct">${item.status==='uploading'?item.progress+'%':''}</span></div>`;
+  }
+  html+=`</div>`;
+  panel.innerHTML=html;
+}
+function _adminShareFolder(name){
+  _ensureAdminState();
+  const fullPath=_afPath.length===0?name:_afPath.join('/')+'/'+name;
+  // Ensure folder exists
+  if(!state.__admin.folders.some(f=>f.name===fullPath))return;
+  let shareInfo=state.__admin.shares[fullPath];
+  if(!shareInfo){
+    const token=Math.random().toString(36).substr(2,10)+Math.random().toString(36).substr(2,10);
+    shareInfo={token,created:Date.now()};
+    state.__admin.shares[fullPath]=shareInfo;
+    saveState(state);
+    _renderAdminFiles();
+  }
+  const prodBase='https://spark700.github.io/kh-vfx-tracker/';
+  const url=prodBase+'?upload='+shareInfo.token;
+  // Show share link overlay
+  const ov=document.createElement("div");
+  ov.className="confirm-overlay";ov.id="afShareOverlay";
+  ov.innerHTML=`<div class="confirm-box" style="text-align:left"><div class="confirm-title" style="color:#58a6ff">Share Link</div><div class="confirm-msg" style="text-align:left">Folder: <b>${esc(name)}</b><br><span style="font-size:11px;color:#484f58">Anyone with this link can upload files to this folder.</span></div><div class="af-share-row"><code id="afShareUrl">${esc(url)}</code><button id="afCopyBtn" onclick="_afCopyShareLink()">Copy</button></div><div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="confirm-btn cancel" onclick="_afRevokeShare('${esc(fullPath)}')">Revoke</button><button class="confirm-btn cancel" onclick="document.getElementById('afShareOverlay').remove()">Close</button></div></div>`;
+  document.body.appendChild(ov);
+}
+function _afCopyShareLink(){
+  const url=document.getElementById("afShareUrl")?.textContent;
+  if(!url)return;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=document.getElementById("afCopyBtn");
+    if(btn){btn.textContent="Copied!";btn.classList.add("copied");setTimeout(()=>{btn.textContent="Copy";btn.classList.remove("copied");},2000);}
+  });
+}
+function _afRevokeShare(fullPath){
+  _ensureAdminState();
+  delete state.__admin.shares[fullPath];
+  saveState(state);
+  document.getElementById("afShareOverlay")?.remove();
+  _renderAdminFiles();
+}
+function _adminDownloadFolder(name){
+  const items=_afGetItems();
+  const folder=items.find(f=>f.name===name&&f.type==='folder');
+  if(!folder||!folder.children)return;
+  const files=_collectFileUrlsWithPath(folder.children,'');
+  _downloadAsZip(files,'admin_'+name);
+}
+function _afDownloadAll(){
+  const items=_afGetItems();
+  const files=_collectFileUrlsWithPath(items,'');
+  _downloadAsZip(files,'admin_files');
+}
+
+// === PUBLIC UPLOAD PAGE (share link) ===
+function _checkPublicUpload(){
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('upload');
+  if(!token)return false;
+  _pubUploadMode=true;
+  // Auto-login as guest (bypasses password prompt)
+  currentUser={id:"guest",display:"Guest",role:"guest"};
+  // Hide ALL normal UI including login overlay
+  document.querySelectorAll('body > *:not(script):not(link)').forEach(el=>el.style.display='none');
+  // Load state to find which folder this token maps to
+  _initPublicUpload(token);
+  return true;
+}
+async function _initPublicUpload(token){
+  await _pullRemote();
+  if(!state.__admin||!state.__admin.shares){_showPubError('Invalid or expired link');return;}
+  let targetFolder=null;
+  for(const[folder,info] of Object.entries(state.__admin.shares)){
+    if(info.token===token){targetFolder=folder;break;}
+  }
+  if(!targetFolder){_showPubError('Invalid or expired link');return;}
+  window.history.replaceState({},'',window.location.pathname);
+  _renderPublicUpload(targetFolder,token);
+}
+function _showPubError(msg){
+  document.body.innerHTML=`<div class="pub-upload-wrap"><h2>KILLHOUSE VFX</h2><div style="color:#f85149;font-size:16px;margin-top:20px">${msg}</div></div>`;
+}
+let _pubQueue=[];
+function _renderPublicUpload(folder,token){
+  const folderName=folder.includes('/')?folder.split('/').pop():folder;
+  let html=`<div class="pub-upload-wrap"><h2>📁 Upload Files</h2><div class="pub-folder">${esc(folder)}</div>`;
+  html+=`<div class="files-drop" id="pubDropZone" onclick="document.getElementById('pubFileInput').click()">Drop files here or click to upload</div>`;
+  html+=`<input type="file" id="pubFileInput" multiple style="display:none">`;
+  html+=`<div class="pub-status" id="pubStatus"></div>`;
+  html+=`<div class="pub-upload-list" id="pubList"></div>`;
+  html+=`</div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  const dz=document.getElementById("pubDropZone");
+  const fi=document.getElementById("pubFileInput");
+  fi.addEventListener("change",()=>{_pubHandleFiles(folder,token,Array.from(fi.files));fi.value='';});
+  dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
+  dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
+  dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");_pubHandleFiles(folder,token,Array.from(e.dataTransfer.files));});
+}
+async function _pubHandleFiles(folder,token,files){
+  if(!files.length)return;
+  const statusEl=document.getElementById("pubStatus");
+  const listEl=document.getElementById("pubList");
+  for(const file of files){
+    const r2Key='admin/'+folder+'/'+file.name;
+    const itemId='pub-'+Date.now()+'-'+Math.random().toString(36).substr(2,4);
+    const itemHtml=`<div class="pub-upload-item" id="${itemId}"><span class="pub-icon">◌</span><span class="pub-name">${esc(file.name)}</span><span class="pub-pct">0%</span></div>`;
+    listEl.insertAdjacentHTML('beforeend',itemHtml);
+    statusEl.textContent='Uploading '+file.name+'...';
+    const ok=await r2UploadXHR(r2Key,file,(pct)=>{
+      const el=document.getElementById(itemId);
+      if(el){el.querySelector('.pub-pct').textContent=pct+'%';}
+    });
+    const el=document.getElementById(itemId);
+    if(ok){
+      if(el){el.querySelector('.pub-icon').textContent='✅';el.querySelector('.pub-pct').textContent='';}
+      // Save file metadata to state
+      if(!state.__admin)state.__admin={};
+      if(!state.__admin.files)state.__admin.files={};
+      if(!state.__admin.files[folder])state.__admin.files[folder]=[];
+      state.__admin.files[folder].push({
+        name:file.name,size:file.size,r2key:r2Key,
+        author:'Guest',date:new Date().toISOString().slice(0,10)
+      });
+      saveState(state);
+    } else {
+      if(el){el.querySelector('.pub-icon').textContent='❌';el.querySelector('.pub-pct').textContent='Failed';}
+    }
+  }
+  statusEl.textContent='Done!';
+}
 
 function openUserManager(){
   const ov=document.createElement("div");
@@ -2861,6 +3233,7 @@ function openShot(id){
   _shotCurrentId=id;_shotTab='versions';_filesPath=[];
   document.getElementById("shotTabVersions").classList.add("active");
   document.getElementById("shotTabFiles").classList.remove("active");
+  document.querySelector(".shot-panel").classList.remove("files-mode");
   const task=TASKS.find(t=>t.id===id);
   if(!task)return;
   const cat=getCat(id);
@@ -2981,27 +3354,55 @@ function _renderEditCell(shotId,name){
   }
   return `<span class="f-edit-action ${actClass}">${last.action}</span>${esc(last.user)}${tip}`;
 }
+const _sizeCache={};
+async function _r2HeadSize(r2Key){
+  const now=new Date();
+  const amzDate=now.toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  const dateStamp=amzDate.substring(0,8);
+  const region="auto",service="s3";
+  const host=new URL(R2_ENDPOINT).host;
+  const encodedPath="/"+R2_BUCKET+"/"+r2Key.split("/").map(s=>encodeURIComponent(s)).join("/");
+  const headers={"host":host,"x-amz-content-sha256":"UNSIGNED-PAYLOAD","x-amz-date":amzDate};
+  const signedHeaders=Object.keys(headers).sort().join(";");
+  const canonicalHeaders=Object.keys(headers).sort().map(k=>k+":"+headers[k]).join("\n")+"\n";
+  const canonicalRequest=["HEAD",encodedPath,"",canonicalHeaders,signedHeaders,"UNSIGNED-PAYLOAD"].join("\n");
+  const scope=dateStamp+"/"+region+"/"+service+"/aws4_request";
+  const stringToSign=["AWS4-HMAC-SHA256",amzDate,scope,await _sha256hex(canonicalRequest)].join("\n");
+  const signingKey=await _getSigningKey(R2_SECRET_KEY,dateStamp,region,service);
+  const sig=[...await _hmac(signingKey,stringToSign)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  const auth="AWS4-HMAC-SHA256 Credential="+R2_ACCESS_KEY+"/"+scope+", SignedHeaders="+signedHeaders+", Signature="+sig;
+  const r=await fetch(R2_ENDPOINT+encodedPath,{method:"HEAD",headers:{...headers,"Authorization":auth}});
+  return parseInt(r.headers.get("content-length"))||0;
+}
+function _fetchSize(url,cb){
+  if(_sizeCache[url]!==undefined){cb(_sizeCache[url]);return;}
+  _sizeCache[url]=-1;// mark as fetching
+  const r2Key=url.replace(CDN_BASE+'/','');
+  _r2HeadSize(r2Key).then(cl=>{_sizeCache[url]=cl;cb(cl);}).catch(()=>{_sizeCache[url]=0;});
+}
 function _getFilesRoot(id){
   const hasSrc=hasGif(id);
   // source: original (raw footage) + preview (source preview video)
-  const sourcePreview=hasSrc?[{name:id+".mp4",size:"—",date:"—",url:CDN_BASE+"/video/"+id+".mp4"}]:[];
+  const srcUrl=CDN_BASE+"/video/"+id+".mp4";
+  const srcBytes=_sizeCache[srcUrl]>0?_sizeCache[srcUrl]:0;
+  const sourcePreview=hasSrc?[{name:id+".mp4",size:srcBytes?_formatSize(srcBytes):'…',_bytes:srcBytes,date:"—",url:srcUrl}]:[];
+  if(hasSrc&&!_sizeCache[srcUrl])_fetchSize(srcUrl,()=>{if(_shotCurrentId===id&&_shotTab==='files')_renderShotFiles(id);});
   const sourceChildren=[
     {name:"original",type:"folder",locked:true,children:[]},
     {name:"preview",type:"folder",locked:true,children:sourcePreview},
   ];
   // versions: preview (artist uploads _v###) + final (approved renders)
   const versions=state[id]?.versions||[];
-  const versionPreviews=versions.map(v=>({
-    name:v.name||'unknown',
-    size:"—",
-    date:v.ts?new Date(v.ts).toISOString().slice(0,10):"—",
-    url:v.url
-  }));
+  const versionPreviews=versions.map(v=>{
+    let bytes=v.size||0;
+    if(!bytes&&v.url){bytes=_sizeCache[v.url]>0?_sizeCache[v.url]:0;if(!_sizeCache[v.url])_fetchSize(v.url,()=>{if(_shotCurrentId===id&&_shotTab==='files')_renderShotFiles(id);});}
+    return {name:v.name||'unknown',size:bytes?_formatSize(bytes):'…',_bytes:bytes,date:v.ts?new Date(v.ts).toISOString().slice(0,10):"—",url:v.url};
+  });
   const finalFiles=(state[id]?.files?.['versions/final']||[]).map(f=>({
-    name:f.name,size:_formatSize(f.size),date:f.date||'—',url:CDN_BASE+'/'+f.r2key
+    name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key
   }));
   const origFiles=(state[id]?.files?.['source/original']||[]).map(f=>({
-    name:f.name,size:_formatSize(f.size),date:f.date||'—',url:CDN_BASE+'/'+f.r2key
+    name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key
   }));
   if(origFiles.length) sourceChildren[0].children=origFiles;
   const versionsChildren=[
@@ -3031,7 +3432,7 @@ function _getFilesRoot(id){
       seen.add(relName);
       const fullPath=prefix?prefix+'/'+relName:relName;
       const files=(state[id]?.files?.[fullPath]||[]).map(f=>({
-        name:f.name,size:_formatSize(f.size),date:f.date||'—',url:CDN_BASE+'/'+f.r2key
+        name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key
       }));
       const subFolders=_buildUserTree(fullPath);
       result.push({name:relName,type:"folder",locked:false,children:files.concat(subFolders)});
@@ -3041,7 +3442,7 @@ function _getFilesRoot(id){
   const userFolders=_buildUserTree('');
   // root-level files
   const rootFiles=(state[id]?.files?.['_root']||[]).map(f=>({
-    name:f.name,size:_formatSize(f.size),date:f.date||'—',url:CDN_BASE+'/'+f.r2key
+    name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key
   }));
   return root.concat(userFolders).concat(rootFiles);
 }
@@ -3216,7 +3617,7 @@ function _commitUploadedFile(item){
   if(item.meta.isVersion){
     // Version preview
     if(!state[id].versions)state[id].versions=[];
-    state[id].versions.push({name:item.meta.versionName,baseName:item.meta.baseName,url:CDN_BASE+'/'+item.r2Key,thumb:null,ts:Date.now()});
+    state[id].versions.push({name:item.meta.versionName,baseName:item.meta.baseName,url:CDN_BASE+'/'+item.r2Key,thumb:null,ts:Date.now(),size:item.size||0});
     // Generate thumb async (don't block queue)
     const thumbKey="versions/"+id+"/thumb_"+item.meta.baseName+_formatVersion(item.meta.vNum)+".jpg";
     _generateThumbnail(CDN_BASE+"/"+item.r2Key,thumbKey).then(url=>{
@@ -3369,7 +3770,6 @@ function _renderShotFiles(id){
   html+=`<span class="files-path">📁 ${esc(breadcrumb)}</span>`;
   html+=`<div class="files-sel-bar" id="filesSelBar"></div>`;
   if(canMkdir) html+=`<button class="files-btn" onclick="_showNewFolderInput('${id}')">📁+ New Folder</button>`;
-  if(canUp) html+=`<button class="files-btn" onclick="document.getElementById('filesFolderInput').click()" title="Upload folder">📁↑</button>`;
   html+=`<button class="files-btn" onclick="_downloadAllFiles('${id}')" title="Download all files"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`;
   html+=`</div>`;
   // new folder input (hidden by default)
@@ -3380,15 +3780,15 @@ function _renderShotFiles(id){
   html+=`</div>`;
   // table
   html+=`<div class="files-table-wrap">`;
-  html+=`<table class="files-table"><thead><tr><th>Name</th><th>Size</th><th>Last Edit</th><th>Date</th><th></th></tr></thead><tbody>`;
+  html+=`<table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>Last Edit</th><th>Date</th><th></th></tr></thead><tbody>`;
   if(_filesPath.length>0){
-    html+=`<tr data-drop-folder=".." data-nav="up"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td></tr>`;
+    html+=`<tr data-drop-folder=".." data-nav="up"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td><td></td></tr>`;
   }
   let lastWasLocked=false;
   for(const f of items){
     if(f.type==='folder'){
       // Separator after locked folders
-      if(lastWasLocked&&!f.locked){html+=`<tr class="f-locked-sep"><td colspan="5"><hr></td></tr>`;lastWasLocked=false;}
+      if(lastWasLocked&&!f.locked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
       if(f.locked)lastWasLocked=true;
       const lock=f.locked?` 🔒`:'';
       const delBtn=(!f.locked&&_canUpload(id))?`<button class="f-dl" onclick="event.stopPropagation();_deleteFolder('${id}','${esc(f.name)}')" title="Delete folder">🗑</button>`:'';
@@ -3396,15 +3796,21 @@ function _renderShotFiles(id){
       const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:'';
       const selAttr=!f.locked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       const grip=!f.locked?`<span class="f-grip" draggable="true" data-drag-folder="${esc(f.name)}">⠿</span>`:'';
+      const _countFiles=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_countFiles(c.children||[]);else n++;}return n;};
+      const _sumBytes=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sumBytes(c.children||[]);else n+=(c._bytes||0);}return n;};
+      const fileCount=_countFiles(f.children||[]);
+      const folderBytes=_sumBytes(f.children||[]);
+      const folderSize=folderBytes?_formatSize(folderBytes):'';
       html+=`<tr${dropAttr}${selAttr}>
         <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}</td>
-        <td class="f-size">${f.children?.length||0} items</td>
+        <td class="f-size">${fileCount||''}</td>
+        <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
         <td class="f-actions"><button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
       </tr>`;
     } else {
-      if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="5"><hr></td></tr>`;lastWasLocked=false;}
+      if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
       const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
       const fileDelBtn=canDel?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
       const editCell=_renderEditCell(id,f.name);
@@ -3412,6 +3818,7 @@ function _renderShotFiles(id){
       const grip2=!isLocked?`<span class="f-grip" draggable="true" data-drag-file="${esc(f.name)}">⠿</span>`:'';
       html+=`<tr${selAttr2}>
         <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
+        <td class="f-size"></td>
         <td class="f-size">${f.size||''}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date">${f.date||''}</td>
@@ -3489,7 +3896,7 @@ function _renderShotFiles(id){
         });
         if(_fileSelection.size>4){
           const extra=document.createElement("tr");
-          extra.innerHTML=`<td colspan="5" style="color:#8b949e;font-size:11px;padding:4px 10px">+${_fileSelection.size-4} more</td>`;
+          extra.innerHTML=`<td colspan="6" style="color:#8b949e;font-size:11px;padding:4px 10px">+${_fileSelection.size-4} more</td>`;
           table.appendChild(extra);
         }
       } else {
@@ -3662,13 +4069,22 @@ async function _deleteFolder(id,name){
   const ok=await _showConfirm('Delete folder?','Delete <b>'+esc(name)+'</b> and all files inside?');
   if(!ok)return;
   if(!state[id])return;
-  // delete files from R2 (this folder + all nested)
   const toDelete=state[id].userFolders?.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'))||[];
+  // Count total files to delete
+  let totalFiles=0;
+  for(const uf of toDelete) totalFiles+=(state[id]?.files?.[uf.name]||[]).length;
+  const panel=totalFiles>1?_showOperationProgress('Deleting files',totalFiles):null;
+  let done=0;
   for(const uf of toDelete){
     const files=state[id]?.files?.[uf.name]||[];
-    for(const f of files){if(f.r2key) await r2Delete(f.r2key).catch(()=>{});}
+    for(const f of files){
+      if(f.r2key) await r2Delete(f.r2key).catch(()=>{});
+      done++;
+      if(panel)_updateOperationProgress(panel,done,totalFiles,f.name||'');
+    }
     if(state[id].files) delete state[id].files[uf.name];
   }
+  if(panel)_removeOperationProgress(panel);
   if(state[id].userFolders) state[id].userFolders=state[id].userFolders.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/'));
   _addFileHistory(id,'deleted',name,fullPath);
   saveState(state);
@@ -3716,6 +4132,44 @@ const _VIDEO_NATIVE=['mp4','webm'];
 const _VIDEO_TRANSCODE=['mov','avi','mkv','wmv','flv','mxf','ts','m4v','mpg','mpeg','3gp'];
 const _VIDEO_BLOCKED=['r3d','ari','braw','dng','crm','nef','cr2','cr3'];
 
+// Operation progress UI (download zip, delete folder)
+function _showOperationProgress(title,total){
+  const panel=document.createElement('div');
+  panel.className='transcode-progress';
+  panel.innerHTML=`<div class="tp-title">${esc(title)}</div><div class="tp-file">0 / ${total}</div><div class="tp-bar-wrap"><div class="tp-bar" style="width:0%"></div></div><div class="tp-pct">0%</div>`;
+  const overlay=document.getElementById('shotOverlay');
+  (overlay&&!overlay.classList.contains('hidden')?overlay:document.body).appendChild(panel);
+  return panel;
+}
+function _updateOperationProgress(panel,done,total,fileName){
+  if(!panel)return;
+  const pct=total>0?Math.round(done/total*100):0;
+  const bar=panel.querySelector('.tp-bar');if(bar)bar.style.width=pct+'%';
+  const txt=panel.querySelector('.tp-pct');if(txt)txt.textContent=pct+'%';
+  const file=panel.querySelector('.tp-file');if(file)file.textContent=done+' / '+total+(fileName?' — '+fileName:'');
+}
+function _updateOperationLabel(panel,title){
+  if(!panel)return;
+  const t=panel.querySelector('.tp-title');if(t)t.textContent=title;
+}
+function _removeOperationProgress(panel){if(panel)panel.remove();}
+
+// Transcode progress UI
+function _showTranscodeProgress(fileName){
+  const panel=document.createElement('div');
+  panel.className='transcode-progress';
+  panel.innerHTML=`<div class="tp-title">Converting to MP4</div><div class="tp-file">${esc(fileName)}</div><div class="tp-bar-wrap"><div class="tp-bar" style="width:0%"></div></div><div class="tp-pct">0%</div>`;
+  const overlay=document.getElementById('shotOverlay');
+  (overlay||document.body).appendChild(panel);
+  return panel;
+}
+function _updateTranscodeProgress(panel,pct){
+  if(!panel)return;
+  const bar=panel.querySelector('.tp-bar');if(bar)bar.style.width=pct+'%';
+  const txt=panel.querySelector('.tp-pct');if(txt)txt.textContent=pct+'%';
+}
+function _removeTranscodeProgress(panel){if(panel)panel.remove();}
+
 // Validate + transcode a version preview file. Returns {ok, file, versionName} or {ok:false}
 async function _validateAndPrepareVersion(shotId,file){
   const fileExt=(file.name.split('.').pop()||'').toLowerCase();
@@ -3756,13 +4210,17 @@ async function _validateAndPrepareVersion(shotId,file){
   let uploadFile=file;
   let versionName=v.versionName;
   if(_VIDEO_TRANSCODE.includes(fileExt)){
+    // Show transcode progress in a floating panel
+    const panel=_showTranscodeProgress(file.name);
     try{
-      uploadFile=await _transcodeToMp4(file,(pct)=>{});
+      uploadFile=await _transcodeToMp4(file,(pct)=>{_updateTranscodeProgress(panel,pct);});
       versionName=versionName.replace(/\.[^.]+$/,'.mp4');
     }catch(e){
+      _removeTranscodeProgress(panel);
       await _showAlert('Transcode failed','Could not convert <b>.'+esc(fileExt)+'</b> to mp4.<br><br>'+esc(e.message||'Unknown error')+'<br><br>Please convert manually to H.264 .mp4 and try again.');
       return {ok:false};
     }
+    _removeTranscodeProgress(panel);
   }
   return {ok:true,file:uploadFile,versionName,baseName:v.baseName,vNum:v.vNum};
 }
@@ -4007,22 +4465,19 @@ async function _downloadAsZip(files,zipName){
   if(!files.length){await _showAlert('Empty','No files to download');return;}
   const zip=new JSZip();
   let done=0,ok=0;
-  const n=document.getElementById("saveNotice");
-  n.textContent=`Downloading 0/${files.length}...`;n.classList.add("show");
+  const panel=_showOperationProgress('Downloading files',files.length);
   const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
   for(const f of files){
     try{
-      // Proxy through Worker for CORS
       const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
       const resp=await fetch(proxyUrl);
       if(resp.ok){zip.file(f.path,await resp.blob());ok++;}
     }catch(e){}
     done++;
-    n.textContent=`Downloading ${done}/${files.length}...`;
+    _updateOperationProgress(panel,done,files.length,f.name||f.path);
   }
   if(ok===0){
-    // CORS blocked — fallback to direct links
-    n.classList.remove("show");
+    _removeOperationProgress(panel);
     for(const f of files){
       const a=document.createElement('a');
       a.href=f.url;a.download=f.name;a.target='_blank';a.rel='noopener';
@@ -4031,14 +4486,16 @@ async function _downloadAsZip(files,zipName){
     }
     return;
   }
-  n.textContent='Packing ZIP...';
-  const content=await zip.generateAsync({type:'blob'});
+  _updateOperationLabel(panel,'Packing ZIP...');
+  const content=await zip.generateAsync({type:'blob',compression:'DEFLATE'}, (meta)=>{
+    _updateOperationProgress(panel,Math.round(meta.percent),100,'Compressing...');
+  });
   const a=document.createElement('a');
   a.href=URL.createObjectURL(content);
   a.download=zipName+'.zip';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
-  n.textContent='Done';setTimeout(()=>n.classList.remove("show"),1500);
+  _removeOperationProgress(panel);
 }
 function _downloadFolderByName(id,name){
   const {items}=_resolveFilesPath(id);
@@ -4476,6 +4933,7 @@ async function _generateThumbnail(videoUrl,thumbKey){
 
 // --- RENDER TABLE ---
 function render(){
+  if(_pubUploadMode)return;
   const tbody=document.getElementById("tbody");
   let rows=TASKS.map((t,i)=>({...t,idx:i+1,status:getStatus(t.id),assignee:getAssignee(t.id)}));
   if(searchQuery){const q=searchQuery.toLowerCase();rows=rows.filter(r=>r.id.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q));}
