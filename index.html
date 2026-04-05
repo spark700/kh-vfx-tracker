@@ -3121,29 +3121,32 @@ function _getCurrentStateKey(){
   if(_filesPath.length>=1&&_filesPath[0]!=='source'&&_filesPath[0]!=='versions')return _filesPath[0];
   return null;
 }
-// Detect if a file looks like a version preview (fuzzy match)
+// Detect if a file looks like it belongs to this shot (version preview or source)
+// Returns: 'version' | 'source' | false
 function _detectVersionFile(shotId,filename){
   const noExt=filename.replace(/\.[^.]+$/,'');
   const ext=(filename.split('.').pop()||'').toLowerCase();
-  // Must be a video format
   const videoExts=['mp4','webm','mov','avi','mkv','wmv','flv','mxf','ts','m4v','mpg','mpeg','3gp'];
   if(!videoExts.includes(ext))return false;
-  // Check for _v### pattern anywhere in name
-  if(!/_v\d{2,4}/i.test(noExt))return false;
-  // Fuzzy match shotId: case-insensitive, allow minor differences
+
   const shotLower=shotId.toLowerCase().replace(/[_\-\s]/g,'');
   const fileLower=noExt.toLowerCase().replace(/[_\-\s]/g,'');
-  // File starts with something similar to shotId
-  if(fileLower.startsWith(shotLower))return true;
-  // Or contains shotId
-  if(fileLower.includes(shotLower))return true;
-  // Partial match: at least 60% of shotId chars match at the start
-  let matchLen=0;
-  for(let i=0;i<Math.min(shotLower.length,fileLower.length);i++){
-    if(shotLower[i]===fileLower[i])matchLen++;else break;
-  }
-  if(matchLen>=shotLower.length*0.6)return true;
-  return false;
+
+  // Check similarity to shotId
+  const isSimilar=fileLower.startsWith(shotLower)||fileLower.includes(shotLower)||(()=>{
+    let m=0;for(let i=0;i<Math.min(shotLower.length,fileLower.length);i++){if(shotLower[i]===fileLower[i])m++;else break;}
+    return m>=shotLower.length*0.6;
+  })();
+  if(!isSimilar)return false;
+
+  // Has _v### → version preview
+  if(/_v\d{2,4}/i.test(noExt))return 'version';
+
+  // Exact shotId match (no version suffix) → likely source or unversioned preview
+  if(fileLower===shotLower)return 'source';
+
+  // Similar to shotId but no version → could be source
+  return 'source';
 }
 const _VIDEO_NATIVE=['mp4','webm'];
 const _VIDEO_TRANSCODE=['mov','avi','mkv','wmv','flv','mxf','ts','m4v','mpg','mpeg','3gp'];
@@ -3233,22 +3236,19 @@ async function _uploadFilesToR2(id,fileList){
   if(!state[id].files)state[id].files={};
   if(!state[id].files[stateKey])state[id].files[stateKey]=[];
   for(const file of fileList){
-    // Smart detection: does this look like a version preview file?
-    if(stateKey!=='versions/preview'){
-      const looksLikeVersion=_detectVersionFile(id,file.name);
-      if(looksLikeVersion){
+    // Smart detection: does this look like a shot video file?
+    if(stateKey!=='versions/preview'&&stateKey!=='source/preview'&&stateKey!=='source/original'){
+      const detected=_detectVersionFile(id,file.name);
+      if(detected==='version'){
         const choice=await _showChoice(
           'Version file detected',
-          'This file looks like a version preview:<br><br>'+
           `<div style="font-family:'SF Mono',monospace;font-size:14px;background:#21262d;padding:8px 12px;border-radius:6px;margin:8px 0">${esc(file.name)}</div>`+
-          '<br>It matches the pattern <b>'+esc(id)+'_v###</b><br><br>'+
-          'Where should it go?',
-          'Upload to versions/preview',
+          'This looks like a <b>version preview</b> (matches <b>'+esc(id)+'_v###</b>).<br><br>Where should it go?',
+          '→ versions/preview',
           'Upload here anyway'
         );
-        if(choice===null)continue;// cancel
+        if(choice===null)continue;
         if(choice==='a'){
-          // Redirect to version pipeline
           const result=await _validateAndPrepareVersion(id,file);
           if(!result.ok)continue;
           const ts=Date.now();
@@ -3264,7 +3264,34 @@ async function _uploadFilesToR2(id,fileList){
           }
           continue;
         }
-        // choice==='b' → fall through to regular upload
+      } else if(detected==='source'){
+        const choice=await _showChoice(
+          'Source file detected',
+          `<div style="font-family:'SF Mono',monospace;font-size:14px;background:#21262d;padding:8px 12px;border-radius:6px;margin:8px 0">${esc(file.name)}</div>`+
+          'This looks like a <b>source video</b> for <b>'+esc(id)+'</b>.<br><br>'+
+          'If this is a version preview, rename it to <b>'+esc(id)+'_v###.'+esc(file.name.split('.').pop())+'</b><br><br>'+
+          'Where should it go?',
+          '→ source/preview',
+          'Upload here anyway'
+        );
+        if(choice===null)continue;
+        if(choice==='a'){
+          // Upload to source/preview
+          const r2key='files/'+id+'/source/preview/'+file.name;
+          const ok=await r2UploadXHR(r2key,file,()=>{});
+          if(ok){
+            if(!state[id].files)state[id].files={};
+            if(!state[id].files['source/preview'])state[id].files['source/preview']=[];
+            state[id].files['source/preview'].push({
+              name:file.name,size:file.size,r2key,
+              author:currentUser?.display||currentUser?.id||'unknown',
+              date:new Date().toISOString().slice(0,10)
+            });
+            _addFileHistory(id,'added',file.name,'source/preview');
+            saveState(state);
+          }
+          continue;
+        }
       }
     }
     // Duplicate check
