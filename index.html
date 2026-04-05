@@ -3707,7 +3707,7 @@ function openShot(id){
   _renderShotBody(id);
   document.getElementById("shotOverlay").classList.remove("hidden");
 }
-function _canUpload(id){if(!_chatFileMode&&!isEditMode())return false;if(id==='__admin')return isAdmin();return isAdmin()||(isArtist()&&getAssignee(id)===currentUser.id);}
+function _canUpload(id){if(id==='__admin')return isAdmin();return isAdmin()||(isArtist()&&getAssignee(id)===currentUser.id);}
 function _renderShotBody(id){
   const body=document.getElementById("shotBody");
   const versions=state[id]?.versions||[];
