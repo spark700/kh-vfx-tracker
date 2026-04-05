@@ -1297,45 +1297,21 @@ function _loadEditMode(){
 }
 function isEditMode(){return _editMode;}
 
-let _myFilesShotId=null;
+let _myFilesShotId=null, _myFilesMode=false;
 function openMyFiles(){
   if(!currentUser||isGuest())return;
+  _myFilesMode=true;
+  _myFilesShotId=null;
+  _filesPath=[];
+  _shotCurrentId='__myfiles';
   document.getElementById("myFilesOverlay").classList.remove("hidden");
   document.getElementById("myFilesUser").textContent=currentUser.display;
-  _myFilesShotId=null;
-  _renderMyFilesRoot();
+  _renderShotFiles('__myfiles');
 }
 function closeMyFiles(){
   document.getElementById("myFilesOverlay").classList.add("hidden");
+  _myFilesMode=false;
   _myFilesShotId=null;
-}
-function _renderMyFilesRoot(){
-  _myFilesShotId=null;
-  const body=document.getElementById("myFilesBody");
-  if(!body)return;
-  const uid=currentUser?.id;
-  const myShots=TASKS.filter(t=>isAdmin()?true:getAssignee(t.id)===uid);
-  let html='<table class="files-table"><thead><tr><th>Shot</th><th>Category</th><th>Status</th><th>Files</th></tr></thead><tbody>';
-  for(const t of myShots){
-    const cat=getCat(t.id);const catCol=getCatColor(cat);
-    const st=getStatus(t.id);
-    const fileCount=Object.values(state[t.id]?.files||{}).reduce((s,arr)=>s+(arr?.length||0),0)+(state[t.id]?.versions?.length||0);
-    html+=`<tr style="cursor:pointer" ondblclick="_myFilesEnterShot('${esc(t.id)}')">
-      <td style="color:#58a6ff;font-weight:600">📁 ${esc(t.id)}</td>
-      <td><span style="background:${catCol}22;color:${catCol};border:1px solid ${catCol}44;padding:2px 8px;border-radius:10px;font-size:11px">${esc(getCatLabel(cat))}</span></td>
-      <td><span class="s-${st}" style="font-size:11px">${st.toUpperCase()}</span></td>
-      <td style="color:#8b949e">${fileCount||'—'}</td>
-    </tr>`;
-  }
-  html+='</tbody></table>';
-  if(!myShots.length)html='<div style="text-align:center;color:#484f58;padding:40px">No shots assigned</div>';
-  body.innerHTML=html;
-}
-function _myFilesEnterShot(shotId){
-  _myFilesShotId=shotId;
-  _shotCurrentId=shotId;
-  _filesPath=[];
-  _renderShotFiles(shotId);
 }
 function openAddShotDialog(){
   if(!isEditMode()||!isAdmin())return;
@@ -3983,8 +3959,22 @@ function openShot(id){
   _renderShotBody(id);
   document.getElementById("shotOverlay").classList.remove("hidden");
 }
-function _canUpload(id){if(id==='__admin')return isAdmin();const sk=_getCurrentStateKey();if(sk&&sk.startsWith('source/'))return isAdmin();return isAdmin()||(isArtist()&&getAssignee(id)===currentUser.id);}
-function _canDeleteFile(id){if(id==='__admin')return isAdmin();const sk=_getCurrentStateKey();if(sk&&sk.startsWith('source/'))return isAdmin();return isAdmin()||(isArtist()&&getAssignee(id)===currentUser.id);}
+function _canUpload(id){
+  if(id==='__admin')return isAdmin();
+  const realId=(id==='__myfiles'&&_filesPath.length>0)?_filesPath[0]:id;
+  if(realId==='__myfiles')return false;
+  const sk=_getCurrentStateKey();
+  if(sk&&sk.startsWith('source/'))return isAdmin();
+  return isAdmin()||(isArtist()&&getAssignee(realId)===currentUser.id);
+}
+function _canDeleteFile(id){
+  if(id==='__admin')return isAdmin();
+  const realId=(id==='__myfiles'&&_filesPath.length>0)?_filesPath[0]:id;
+  if(realId==='__myfiles')return false;
+  const sk=_getCurrentStateKey();
+  if(sk&&sk.startsWith('source/'))return isAdmin();
+  return isAdmin()||(isArtist()&&getAssignee(realId)===currentUser.id);
+}
 function _renderShotBody(id){
   const body=document.getElementById("shotBody");
   const versions=state[id]?.versions||[];
@@ -4155,6 +4145,15 @@ function _fetchSize(url,cb){
   _r2HeadSize(r2Key).then(cl=>{_sizeCache[url]=cl;cb(cl);}).catch(()=>{_sizeCache[url]=0;});
 }
 function _getFilesRoot(id){
+  // My Files: show assigned shots as folders
+  if(id==='__myfiles'){
+    const uid=currentUser?.id;
+    const myShots=TASKS.filter(t=>isAdmin()?true:getAssignee(t.id)===uid);
+    return myShots.map(t=>{
+      const children=_getFilesRoot(t.id);
+      return {name:t.id,type:'folder',locked:false,children};
+    });
+  }
   // Admin files: no locked source/versions folders, just user folders + files
   if(id==='__admin'){
     _ensureAdminState();
@@ -4266,7 +4265,7 @@ function _formatSize(bytes){
 }
 function _resolveFilesPath(id){
   let items=_getFilesRoot(id);
-  let breadcrumb=id==='__admin'?'admin':(_myFilesShotId?'My Files / '+id:id);
+  let breadcrumb=id==='__admin'?'admin':(id==='__myfiles'?'My Files':id);
   let currentFolder=null;
   for(const p of _filesPath){
     const folder=items.find(f=>f.name===p&&f.type==='folder');
@@ -4616,7 +4615,7 @@ function _buildFileTip(id,name,size,editCell,date,icon){
 let _chatFileMode=false;
 function _renderShotFiles(id,overrideBody){
   _clearSelection();_removeCfTip();
-  const body=overrideBody||(_myFilesShotId===id?document.getElementById("myFilesBody"):null)||(_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody"));
+  const body=overrideBody||(id==='__myfiles'?document.getElementById("myFilesBody"):null)||(_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody"));
   const {items,breadcrumb,currentFolder}=_resolveFilesPath(id);
   // Check if current folder or any ancestor in path is locked
   let isLocked=currentFolder?.locked||false;
@@ -4649,7 +4648,7 @@ function _renderShotFiles(id,overrideBody){
   html+=`<div class="files-table-wrap">`;
   const editColName=id==='__admin'?'Author':'Last Edit';
   html+=`<table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>${editColName}</th><th>Date</th><th></th></tr></thead><tbody>`;
-  if(_filesPath.length>0||_myFilesShotId){
+  if(_filesPath.length>0){
     html+=`<tr data-drop-folder=".." data-nav="up"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td><td></td></tr>`;
   }
   let lastWasLocked=false;
@@ -4834,7 +4833,7 @@ function _renderShotFiles(id,overrideBody){
   }
   // Double-click to open folders / navigate up
   body.querySelectorAll("tr[data-nav='up']").forEach(row=>{
-    row.addEventListener("dblclick",()=>{if(_filesPath.length>0){_filesPath.pop();_renderShotFiles(id);}else if(_myFilesShotId){_renderMyFilesRoot();}});
+    row.addEventListener("dblclick",()=>{_filesPath.pop();_renderShotFiles(id);});
     row.style.cursor="pointer";
   });
   body.querySelectorAll("td[data-nav-folder]").forEach(td=>{
@@ -5017,11 +5016,21 @@ async function _deleteFolder(id,name){
 }
 function _getCurrentR2Folder(id){
   if(id==='__admin'){return _filesPath.length===0?'admin':'admin/'+_filesPath.join('/');}
+  if(id==='__myfiles'&&_filesPath.length>0){const shotId=_filesPath[0];const rest=_filesPath.slice(1);return rest.length?'files/'+shotId+'/'+rest.join('/'):'files/'+shotId;}
   if(_filesPath.length===0)return 'files/'+id;
   return 'files/'+id+'/'+_filesPath.join('/');
 }
 function _getCurrentStateKey(){
   if(_shotCurrentId==='__admin'){return _filesPath.length===0?'_root':_filesPath.join('/');}
+  if(_shotCurrentId==='__myfiles'){
+    if(_filesPath.length<=1)return null;
+    const inner=_filesPath.slice(1);
+    if(inner.length===0)return '_root';
+    if(inner.length>=2&&inner[0]==='versions')return inner.slice(0,2).join('/');
+    if(inner.length>=2&&inner[0]==='source')return inner.slice(0,2).join('/');
+    if(inner.length>=1&&inner[0]!=='source'&&inner[0]!=='versions')return inner.join('/');
+    return null;
+  }
   if(_filesPath.length===0)return '_root';
   if(_filesPath.length>=2&&_filesPath[0]==='versions')return _filesPath.slice(0,2).join('/');
   if(_filesPath.length>=2&&_filesPath[0]==='source')return _filesPath.slice(0,2).join('/');
