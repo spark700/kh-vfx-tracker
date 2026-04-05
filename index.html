@@ -457,6 +457,16 @@
   .chat-file-link { color: #58a6ff; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; padding: 1px 4px; border-radius: 3px; }
   .chat-file-link:hover { background: rgba(88,166,255,0.1); }
   .chat-drop-active { border-color: #58a6ff !important; background: rgba(88,166,255,0.05) !important; }
+  .chat-file-card { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; margin-top: 4px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .chat-file-card:hover { border-color: #58a6ff; }
+  .chat-file-card .cfc-icon { font-size: 18px; flex-shrink: 0; }
+  .chat-file-card .cfc-info { flex: 1; min-width: 0; }
+  .chat-file-card .cfc-name { font-size: 13px; color: #c9d1d9; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-file-card .cfc-meta { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .chat-file-card .cfc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .chat-file-card .cfc-btn { background: none; border: 1px solid #30363d; color: #8b949e; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .chat-file-card .cfc-btn:hover { color: #c9d1d9; border-color: #484f58; }
+  .chat-messages.drop-highlight { outline: 2px dashed #58a6ff; outline-offset: -4px; border-radius: 8px; }
   .chat-files-panel:not([style*="display: none"]) + .note-panel { border-radius: 0 12px 12px 0; }
   .note-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px; border-bottom: 1px solid #21262d; flex-shrink: 0; }
   .note-panel-title { display: flex; align-items: center; gap: 10px; }
@@ -2184,12 +2194,15 @@ function openNote(taskId,type){
 }
 
 function _renderFileLinks(html){
+  // Replace [[filecard:path]] with rich file card
+  html=html.replace(/\[\[filecard:([^\]]+)\]\]/g,(m,path)=>_renderFileCard(path));
   // Replace [[file:path/to/file.txt]] with clickable link
-  return html.replace(/\[\[file:([^\]]+)\]\]/g,(m,path)=>{
+  html=html.replace(/\[\[file:([^\]]+)\]\]/g,(m,path)=>{
     const name=path.includes('/')?path.split('/').pop():path;
     const icon=path.endsWith('/')||!name.includes('.')?'📁':'📄';
     return `<span class="chat-file-link" onclick="_navigateChatFile('${esc(path)}')" title="${esc(path)}">${icon} ${esc(name)}</span>`;
   });
+  return html;
 }
 function _navigateChatFile(path){
   if(!noteTaskId||noteType!=='chat')return;
@@ -2280,6 +2293,65 @@ function jumpToPlayerNote(id,versionIdx,frame){
   if(vid&&vid.readyState>=1)setTimeout(doSeek,300);
   else vid?.addEventListener('loadedmetadata',()=>setTimeout(doSeek,100),{once:true});
 }
+function _chatMsgDragOver(e){
+  e.preventDefault();e.dataTransfer.dropEffect="copy";
+  e.currentTarget.classList.add("drop-highlight");
+}
+function _chatMsgDrop(e){
+  e.preventDefault();e.stopPropagation();
+  e.currentTarget.classList.remove("drop-highlight");
+  const file=e.dataTransfer.getData("text/x-file-move");
+  const folder=e.dataTransfer.getData("text/x-folder-move");
+  const multi=e.dataTransfer.getData("text/x-multi-move");
+  let names=[];
+  if(multi){try{names=JSON.parse(multi);}catch(ex){}}
+  else if(file)names=[file];
+  else if(folder)names=[folder];
+  if(!names.length)return;
+  const path=_filesPath.length?_filesPath.join('/')+'/':'';
+  // Send each as a file card message
+  for(const n of names){
+    const fullPath=path+n;
+    const tag=`[[filecard:${fullPath}]]`;
+    _sendChatFileCard(tag);
+  }
+}
+function _sendChatFileCard(text){
+  if(!noteTaskId)return;
+  if(!state[noteTaskId])state[noteTaskId]={};
+  if(!state[noteTaskId].chat)state[noteTaskId].chat=[];
+  const role=isAdmin()?'admin':isClient()?'client':'artist';
+  state[noteTaskId].chat.push({id:Date.now(),author:role,text,ts:Date.now()});
+  saveState(state);renderChat();
+}
+function _renderFileCard(path){
+  // Find file/folder info from shot data
+  const id=noteTaskId;
+  if(!id)return `<span class="chat-file-link" onclick="_navigateChatFile('${esc(path)}')">${esc(path)}</span>`;
+  const parts=path.replace(/\/$/,'').split('/');
+  const name=parts[parts.length-1];
+  const isFolder=path.endsWith('/');
+  // Try to find in file tree
+  let items=_getFilesRoot(id);
+  for(let i=0;i<parts.length-1;i++){
+    const f=items.find(x=>x.name===parts[i]&&x.type==='folder');
+    if(f)items=f.children||[];else break;
+  }
+  const entry=items.find(x=>x.name===name);
+  let size='',count='';
+  const icon=isFolder||entry?.type==='folder'?'📁':_fileIcon(name);
+  if(entry?.type==='folder'){
+    const _cnt=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_cnt(c.children||[]);else n++;}return n;};
+    const _sz=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sz(c.children||[]);else n+=(c._bytes||0);}return n;};
+    const fc=_cnt(entry.children||[]);const fb=_sz(entry.children||[]);
+    if(fc)count=fc+' file'+(fc!==1?'s':'');
+    if(fb)size=_formatSize(fb);
+  } else if(entry){
+    size=entry.size||'';
+  }
+  const meta=[count,size].filter(Boolean).join(' • ');
+  return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${entry?.url?`<a class="cfc-btn" href="${entry.url}" target="_blank" onclick="event.stopPropagation()" title="Download">⬇</a>`:''}</div></div>`;
+}
 function _chatTaDragOver(e){
   e.preventDefault();e.dataTransfer.dropEffect="copy";
   e.target.classList.add("chat-drop-active");
@@ -2315,7 +2387,7 @@ function renderChat(){
   all.sort((a,b)=>(a.ts||0)-(b.ts||0));
   const msgs=chatMsgs; // keep for reply lookups
   const body=document.getElementById("notePanelBody");
-  let html='<div class="chat-messages" id="chatMessages">';
+  let html='<div class="chat-messages" id="chatMessages" ondragover="_chatMsgDragOver(event)" ondragleave="this.classList.remove(\'drop-highlight\')" ondrop="_chatMsgDrop(event)">';
   if(!all.length) html+='<div class="chat-empty">No messages yet</div>';
   else all.forEach(m=>{
     if(m._isPlayerNote){
