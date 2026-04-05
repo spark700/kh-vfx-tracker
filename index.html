@@ -3374,17 +3374,17 @@ async function r2Delete(key){
   const dateStamp=amzDate.substring(0,8);
   const region="auto",service="s3";
   const host=new URL(R2_ENDPOINT).host;
-  const path="/"+R2_BUCKET+"/"+key;
+  const encodedPath="/"+R2_BUCKET+"/"+key.split("/").map(s=>encodeURIComponent(s)).join("/");
   const headers={"host":host,"x-amz-content-sha256":"UNSIGNED-PAYLOAD","x-amz-date":amzDate};
   const signedHeaders=Object.keys(headers).sort().join(";");
   const canonicalHeaders=Object.keys(headers).sort().map(k=>k+":"+headers[k]).join("\n")+"\n";
-  const canonicalRequest=["DELETE",path,"",canonicalHeaders,signedHeaders,"UNSIGNED-PAYLOAD"].join("\n");
+  const canonicalRequest=["DELETE",encodedPath,"",canonicalHeaders,signedHeaders,"UNSIGNED-PAYLOAD"].join("\n");
   const scope=dateStamp+"/"+region+"/"+service+"/aws4_request";
   const stringToSign=["AWS4-HMAC-SHA256",amzDate,scope,await _sha256hex(canonicalRequest)].join("\n");
   const signingKey=await _getSigningKey(R2_SECRET_KEY,dateStamp,region,service);
   const sig=[...await _hmac(signingKey,stringToSign)].map(b=>b.toString(16).padStart(2,"0")).join("");
   const auth="AWS4-HMAC-SHA256 Credential="+R2_ACCESS_KEY+"/"+scope+", SignedHeaders="+signedHeaders+", Signature="+sig;
-  return fetch(R2_ENDPOINT+path,{method:"DELETE",headers:{...headers,"Authorization":auth}});
+  return fetch(R2_ENDPOINT+encodedPath,{method:"DELETE",headers:{...headers,"Authorization":auth}});
 }
 
 // --- R2 UPLOAD ---
@@ -3414,17 +3414,18 @@ async function _signR2(key,contentType){
   const dateStamp=amzDate.substring(0,8);
   const region="auto",service="s3";
   const host=new URL(R2_ENDPOINT).host;
-  const path="/"+R2_BUCKET+"/"+key;
+  const rawPath="/"+R2_BUCKET+"/"+key;
+  const encodedPath="/"+R2_BUCKET+"/"+key.split("/").map(s=>encodeURIComponent(s)).join("/");
   const headers={"host":host,"x-amz-content-sha256":"UNSIGNED-PAYLOAD","x-amz-date":amzDate,"content-type":contentType};
   const signedHeaders=Object.keys(headers).sort().join(";");
   const canonicalHeaders=Object.keys(headers).sort().map(k=>k+":"+headers[k]).join("\n")+"\n";
-  const canonicalRequest=["PUT",path,"",canonicalHeaders,signedHeaders,"UNSIGNED-PAYLOAD"].join("\n");
+  const canonicalRequest=["PUT",encodedPath,"",canonicalHeaders,signedHeaders,"UNSIGNED-PAYLOAD"].join("\n");
   const scope=dateStamp+"/"+region+"/"+service+"/aws4_request";
   const stringToSign=["AWS4-HMAC-SHA256",amzDate,scope,await _sha256hex(canonicalRequest)].join("\n");
   const signingKey=await _getSigningKey(R2_SECRET_KEY,dateStamp,region,service);
   const sig=[...await _hmac(signingKey,stringToSign)].map(b=>b.toString(16).padStart(2,"0")).join("");
   const auth="AWS4-HMAC-SHA256 Credential="+R2_ACCESS_KEY+"/"+scope+", SignedHeaders="+signedHeaders+", Signature="+sig;
-  return{url:R2_ENDPOINT+path,headers:{...headers,"Authorization":auth}};
+  return{url:R2_ENDPOINT+encodedPath,headers:{...headers,"Authorization":auth}};
 }
 
 function r2UploadXHR(key,file,onProgress){
