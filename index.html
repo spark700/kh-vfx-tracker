@@ -2620,11 +2620,8 @@ function _renderFileCard(path){
   return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${dlBtn}</div></div>`;
 }
 async function _downloadFile(url,name){
-  const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
-  const CDN=CDN_BASE;
   try{
-    const proxyUrl=url.startsWith(CDN)?WORKER+url.substring(CDN.length+1):url;
-    const r=await fetch(proxyUrl);
+    const r=await fetch(url);
     if(!r.ok)throw new Error('fetch failed');
     const blob=await r.blob();
     const a=document.createElement('a');
@@ -5197,7 +5194,6 @@ function _collectFileUrlsWithPath(items,prefix){
 }
 async function _downloadAsZip(files,zipName){
   if(!files.length){await _showAlert('Empty','No files to download');return;}
-  const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
   const PARALLEL=6;
   let done=0,ok=0;
   const panel=_showOperationProgress('Downloading & zipping',files.length);
@@ -5214,8 +5210,7 @@ async function _downloadAsZip(files,zipName){
   for(let i=0;i<files.length;i+=PARALLEL){
     const batch=files.slice(i,i+PARALLEL);
     const results=await Promise.allSettled(batch.map(async f=>{
-      const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
-      const resp=await fetch(proxyUrl);
+      const resp=await fetch(f.url);
       if(!resp.ok)throw new Error('fetch failed');
       const buf=new Uint8Array(await resp.arrayBuffer());
       return{path:f.path,buf};
