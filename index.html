@@ -2280,6 +2280,29 @@ function jumpToPlayerNote(id,versionIdx,frame){
   if(vid&&vid.readyState>=1)setTimeout(doSeek,300);
   else vid?.addEventListener('loadedmetadata',()=>setTimeout(doSeek,100),{once:true});
 }
+function _chatTaDragOver(e){
+  e.preventDefault();e.dataTransfer.dropEffect="copy";
+  e.target.classList.add("chat-drop-active");
+}
+function _chatTaDrop(e){
+  e.preventDefault();e.stopPropagation();
+  const ta=e.target;
+  ta.classList.remove("chat-drop-active");
+  const file=e.dataTransfer.getData("text/x-file-move");
+  const folder=e.dataTransfer.getData("text/x-folder-move");
+  const multi=e.dataTransfer.getData("text/x-multi-move");
+  let links=[];
+  if(multi){try{links=JSON.parse(multi);}catch(ex){}}
+  else if(file)links=[file];
+  else if(folder)links=[folder+'/'];
+  if(!links.length)return;
+  const path=_filesPath.length?_filesPath.join('/')+'/':'';
+  const insert=links.map(n=>`[[file:${path}${n}]]`).join(' ');
+  const pos=ta.selectionStart||0;
+  ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
+  ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
+  ta.dispatchEvent(new Event("input"));
+}
 function renderChat(){
   const chatMsgs=getChat(noteTaskId),canSend=canChat(noteTaskId);
   const playerNotes=_collectPlayerNotes(noteTaskId);
@@ -2339,7 +2362,7 @@ function renderChat(){
     html+=`<div class="chat-input-area">`;
     html+=`<div class="chat-editing-hint${editingMsgId!==null?'':' hidden'}" id="chatEditHint"><span>Editing message...</span><button class="chat-editing-close" onclick="cancelEdit()">&times;</button></div>`;
     html+=`<div class="chat-reply-preview hidden" id="chatReplyPreview"><span id="chatReplyText"></span><button class="chat-reply-close" onclick="cancelReply()">&times;</button></div>`;
-    html+=`<div class="chat-input-row"><button class="chat-todo-btn${todoMode?' active':''}" onclick="toggleTodoMode()" title="Todo list builder">&#9745;</button><button class="chat-todo-btn" onclick="document.getElementById('chatFileInput').click()" title="Attach image">&#128206;</button><input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="chatAttachFile(this)"><textarea id="chatTA" placeholder="${todoMode?'Each line = todo item. Enter to send list.':'Paste image or type...'}" rows="1"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
+    html+=`<div class="chat-input-row"><button class="chat-todo-btn${todoMode?' active':''}" onclick="toggleTodoMode()" title="Todo list builder">&#9745;</button><button class="chat-todo-btn" onclick="document.getElementById('chatFileInput').click()" title="Attach image">&#128206;</button><input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="chatAttachFile(this)"><textarea id="chatTA" placeholder="${todoMode?'Each line = todo item. Enter to send list.':'Paste image or type...'}" rows="1" ondragover="_chatTaDragOver(event)" ondragleave="this.classList.remove('chat-drop-active')" ondrop="_chatTaDrop(event)"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
     html+=`<div class="chat-paste-preview hidden" id="chatPastePreview"><img id="chatPasteImg"><button onclick="cancelPaste()" style="position:absolute;top:4px;right:4px;background:#21262d;border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px">&times;</button></div>`;
     html+=`<div class="chat-hint">${todoMode?'Todo mode: each Shift+Enter = new item &nbsp;|&nbsp; Enter — send list':'Enter — send &nbsp;|&nbsp; Shift+Enter — new line &nbsp;|&nbsp; &#9745; — todo builder'}</div>`;
     html+=`</div>`;
@@ -2350,34 +2373,6 @@ function renderChat(){
   // Bind Enter key
   const ta=document.getElementById("chatTA");
   if(ta){
-    // Accept file/folder drops from chat files panel
-    ta.addEventListener("dragover",e=>{
-      // Accept any internal drag (grip handles set custom types)
-      const t=e.dataTransfer.types;
-      if(t.includes("text/x-file-move")||t.includes("text/x-folder-move")||t.includes("text/x-multi-move")||_cfDragging){
-        e.preventDefault();e.dataTransfer.dropEffect="copy";
-        ta.classList.add("chat-drop-active");
-      }
-    });
-    ta.addEventListener("dragleave",()=>ta.classList.remove("chat-drop-active"));
-    ta.addEventListener("drop",e=>{
-      ta.classList.remove("chat-drop-active");
-      const file=e.dataTransfer.getData("text/x-file-move");
-      const folder=e.dataTransfer.getData("text/x-folder-move");
-      const multi=e.dataTransfer.getData("text/x-multi-move");
-      let links=[];
-      if(multi){try{links=JSON.parse(multi);}catch(ex){}}
-      else if(file)links=[file];
-      else if(folder)links=[folder+'/'];
-      if(!links.length)return;
-      e.preventDefault();e.stopPropagation();
-      const path=_filesPath.length?_filesPath.join('/')+'/':'';
-      const insert=links.map(n=>`[[file:${path}${n}]]`).join(' ');
-      const pos=ta.selectionStart||0;
-      ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
-      ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
-      ta.dispatchEvent(new Event("input"));
-    });
     ta.addEventListener("keydown",e=>{
       if(todoMode){
         if(e.key==="Enter"&&e.shiftKey){
