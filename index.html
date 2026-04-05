@@ -5194,53 +5194,42 @@ function _collectFileUrlsWithPath(items,prefix){
 }
 async function _downloadAsZip(files,zipName){
   if(!files.length){await _showAlert('Empty','No files to download');return;}
-  const PARALLEL=6;
   let done=0,ok=0;
   const panel=_showOperationProgress('Downloading & zipping',files.length);
   const fileStream=streamSaver.createWriteStream(zipName+'.zip');
   const writer=fileStream.getWriter();
-  const crc32Table=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c;}return t;})();
-  function crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=crc32Table[(c^buf[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
   const encoder=new TextEncoder();
   const centralDir=[];
   let offset=0;
   async function writeBytes(bytes){await writer.write(bytes instanceof Uint8Array?bytes:new Uint8Array(bytes));offset+=bytes.length;}
   function makeU16(v){return[v&0xFF,(v>>8)&0xFF];}
   function makeU32(v){return[v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF];}
-  for(let i=0;i<files.length;i+=PARALLEL){
-    const batch=files.slice(i,i+PARALLEL);
-    const results=await Promise.allSettled(batch.map(async f=>{
+  for(const f of files){
+    try{
       const resp=await fetch(f.url);
       if(!resp.ok)throw new Error('fetch failed');
       const buf=new Uint8Array(await resp.arrayBuffer());
-      return{path:f.path,buf};
-    }));
-    for(const r of results){
-      done++;
-      if(r.status==='fulfilled'){
-        const{path,buf}=r.value;
-        const nameBytes=encoder.encode(path);
-        const crc=crc32(buf);
-        const localHeader=new Uint8Array([
-          0x50,0x4B,0x03,0x04, 0x0A,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
-          ...makeU32(crc),...makeU32(buf.length),...makeU32(buf.length),
-          ...makeU16(nameBytes.length),...makeU16(0),...nameBytes
-        ]);
-        const localOffset=offset;
-        await writeBytes(localHeader);
-        const CHUNK=1024*1024;
-        for(let c=0;c<buf.length;c+=CHUNK){await writeBytes(buf.subarray(c,Math.min(c+CHUNK,buf.length)));}
-        centralDir.push({nameBytes,crc,size:buf.length,offset:localOffset});
-        ok++;
-      }
-      _updateOperationProgress(panel,done,files.length,batch[0]?.name||'');
-    }
+      const nameBytes=encoder.encode(f.path);
+      const localHeader=new Uint8Array([
+        0x50,0x4B,0x03,0x04, 0x0A,0x00, 0x08,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
+        ...makeU32(0),...makeU32(buf.length),...makeU32(buf.length),
+        ...makeU16(nameBytes.length),...makeU16(0),...nameBytes
+      ]);
+      const localOffset=offset;
+      await writeBytes(localHeader);
+      const CHUNK=2*1024*1024;
+      for(let c=0;c<buf.length;c+=CHUNK){await writeBytes(buf.subarray(c,Math.min(c+CHUNK,buf.length)));}
+      centralDir.push({nameBytes,size:buf.length,offset:localOffset});
+      ok++;
+    }catch(e){}
+    done++;
+    _updateOperationProgress(panel,done,files.length,f.name||f.path);
   }
   const cdOffset=offset;
   for(const e of centralDir){
     const cdEntry=new Uint8Array([
       0x50,0x4B,0x01,0x02, 0x14,0x00, 0x0A,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
-      ...makeU32(e.crc),...makeU32(e.size),...makeU32(e.size),
+      ...makeU32(0),...makeU32(e.size),...makeU32(e.size),
       ...makeU16(e.nameBytes.length),...makeU16(0),...makeU16(0),
       ...makeU16(0),...makeU16(0),...makeU32(0x20),...makeU32(e.offset),...e.nameBytes
     ]);
