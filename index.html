@@ -3259,6 +3259,7 @@ function _renderShotFiles(id){
       const name=row.dataset.selName;
       if(e.shiftKey){_rangeSelect(id,name);}
       else if(e.metaKey||e.ctrlKey){_toggleSelect(name);}
+      else if(_fileSelection.size===1&&_fileSelection.has(name)){_clearSelection();}
       else{_clearSelection();_toggleSelect(name);}
       _updateSelectionUI(id);
     });
