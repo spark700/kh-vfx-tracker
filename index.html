@@ -958,11 +958,21 @@ function _tryAuthLink(){
   const raw=params.get('auth');
   if(!raw)return false;
   window.history.replaceState({},'',window.location.pathname);
-  // Decode: USER_XXXX_USER_XXXX_USER_XXXX...
-  const parts=raw.split('_');
-  if(parts.length<2)return false;
-  const userId=parts[0].toLowerCase();
-  const token=parts.filter((_,i)=>i%2===1).join('');
+  // New format: base64(id::token)
+  let userId,token;
+  try{
+    const decoded=atob(raw);
+    const sep=decoded.indexOf('::');
+    if(sep<0)return false;
+    userId=decoded.substring(0,sep).toLowerCase();
+    token=decoded.substring(sep+2);
+  }catch(e){
+    // Legacy format fallback: USER_XXXX_USER_XXXX...
+    const parts=raw.split('_');
+    if(parts.length<2)return false;
+    userId=parts[0].toLowerCase();
+    token=parts.filter((_,i)=>i%2===1).join('');
+  }
   if(!token||!userId)return false;
   if(!state.__users)return false;
   const u=state.__users[userId];
@@ -1811,10 +1821,8 @@ function copyAuthLink(id){
   const lt=state.__users?.[id]?.linkToken;
   if(!lt)return;
   const base='https://killhouse-vfx.contora.workers.dev/';
-  const chunks=lt.match(/.{1,4}/g)||[];
-  const ID=id.toUpperCase();
-  const encoded=chunks.join('_'+ID+'_');
-  const url=base+'?auth='+ID+'_'+encoded+'_'+ID;
+  const payload=btoa(id+'::'+lt);
+  const url=base+'?auth='+encodeURIComponent(payload);
   navigator.clipboard.writeText(url);
   // Flash feedback
   const btn=event.target;
