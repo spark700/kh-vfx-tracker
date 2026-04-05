@@ -276,7 +276,7 @@
   .gif-thumb-wrap { position: relative; width: 100%; }
   .gif-play-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .gif-play-icon::after { content: "▶"; font-size: 16px; color: rgba(255,255,255,0.7); text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-  .gif-none { width: 70px; height: 44px; border-radius: 4px; background: #161b22; border: 1px solid #21262d; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #484f58; }
+  .gif-none { width: 100%; aspect-ratio: 16/9; border-radius: 4px; background: #161b22; border: 1px solid #21262d; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #484f58; }
   .gif-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 3000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
   .gif-overlay.hidden { display: none; }
   .gif-player-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -787,6 +787,7 @@
   <span class="separator">|</span>
   <span id="artistFilterBtns" style="display:inline-flex;gap:10px"><button class="artist-filter-btn active" data-artist="all">All Artists</button><button class="artist-filter-btn" data-artist="unassigned">Unassigned</button></span>
   <button class="export-btn" id="editModeBtn" onclick="toggleEditMode()">Edit Shots</button>
+  <button class="export-btn" id="addShotBtn" style="display:none;background:#238636;color:#fff" onclick="openAddShotDialog()">+ Add Shot</button>
 </div>
 
 <table>
@@ -843,39 +844,11 @@ function canEditAdminNote(){return isAdmin();}
 function canEditDesc(){return isAdmin()||isClient();}
 function canChat(t){if(isGuest())return false;if(isAdmin()||isClient())return true;return isArtist()&&getAssignee(t)===currentUser.id;}
 
-const TASKS=[
-  {id:"KH_01_198",desc:"Добавить воронку",cat:"voronka",tcIn:"0:37:47:19",tcOut:"0:37:50:14"},
-  {id:"KH_01_199",desc:"Добавить воронку",cat:"voronka",tcIn:"0:37:57:15",tcOut:"0:37:58:17"},
-  {id:"KH_01_201",desc:"Добавить воронку",cat:"voronka",tcIn:"0:38:13:01",tcOut:"0:38:16:02"},
-  {id:"KH_01_204",desc:"Добавить воронку",cat:"voronka",tcIn:"0:39:10:14",tcOut:"0:39:11:14"},
-  {id:"KH_01_209",desc:"Воронка от снаряда",cat:"voronka",tcIn:"0:40:53:20",tcOut:"0:40:54:08"},
-  {id:"KH_01_220",desc:"Врезка пролета ФПВ дрона",cat:"fpv",tcIn:"0:45:58:03",tcOut:"0:45:59:08"},
-  {id:"KH_01_221",desc:"Врезка пролета ФПВ",cat:"fpv",tcIn:"0:46:03:19",tcOut:"0:46:04:21"},
-  {id:"KH_01_225",desc:"Эффект камеры ФПВ дрона и два выстрела",cat:"fpv",tcIn:"0:46:16:00",tcOut:"0:46:17:01"},
-  {id:"KH_01_227",desc:"Дым добавить и точки от прилетов",cat:"dym",tcIn:"0:47:10:14",tcOut:"0:47:11:22"},
-  {id:"KH_01_228",desc:"Воронки от прилетов и дым...",cat:"voronka",tcIn:"0:47:18:03",tcOut:"0:47:19:01"},
-  {id:"KH_01_253",desc:"Воронки от снарядов",cat:"voronka",tcIn:"0:52:43:00",tcOut:"0:52:46:20"},
-  {id:"KH_01_321",desc:"Царапины от пуль на лобовом стекле",cat:"puli",tcIn:"1:14:52:01",tcOut:"1:14:54:06"},
-  {id:"KH_01_322",desc:"Царапины от пуль на лобовом стекле",cat:"puli",tcIn:"1:14:56:14",tcOut:"1:14:59:12"},
-  {id:"KH_01_323",desc:"Царапины от пуль на лобовом стекле",cat:"puli",tcIn:"1:15:05:21",tcOut:"1:15:12:15"},
-  {id:"KH_01_323_1",desc:"Царапины от пуль на лобовом стекле",cat:"puli",tcIn:"1:15:44:15",tcOut:"1:15:46:22"},
-  {id:"KH_01_324",desc:"Пролет точки — ФПВ дрона",cat:"fpv",tcIn:"1:15:46:23",tcOut:"1:15:49:09"},
-  {id:"KH_01_325",desc:"ФПВ дрон камера, металические усики",cat:"fpv",tcIn:"1:15:49:10",tcOut:"1:15:51:11"},
-  {id:"KH_01_326",desc:"ФПВ дрон камера, металические усики",cat:"fpv",tcIn:"1:15:56:03",tcOut:"1:15:59:14"},
-  {id:"KH_01_327",desc:"Точка ФПВ дрона",cat:"fpv",tcIn:"1:15:59:15",tcOut:"1:16:03:14"},
-  {id:"KH_01_328",desc:"ФПВ несется на дар, камера ФПВ",cat:"fpv",tcIn:"1:16:03:15",tcOut:"1:16:05:22"},
-  {id:"KH_01_329",desc:"Дорисовываем ФПВ в слоу мо",cat:"fpv",tcIn:"1:16:05:23",tcOut:"1:16:06:17"},
-  {id:"KH_01_330",desc:"Камера дрона",cat:"fpv",tcIn:"1:16:06:18",tcOut:"1:16:07:18"},
-  {id:"KH_01_331",desc:"Добавить на первый сажи от взрыва",cat:"vzryv",tcIn:"1:16:15:12",tcOut:"1:16:24:02"},
-  {id:"KH_01_333",desc:"Добавляем Ангар",cat:"angar",tcIn:"1:19:21:21",tcOut:"1:19:27:00"},
-  {id:"KH_01_334",desc:"Добавляем Ангар",cat:"angar",tcIn:"1:19:27:01",tcOut:"1:19:30:15"},
-  {id:"KH_01_335",desc:"Добавляем Ангар",cat:"angar",tcIn:"1:19:32:04",tcOut:"1:19:35:08"},
-  {id:"KH_01_336",desc:"Добавляем Ангар",cat:"angar",tcIn:"1:20:04:08",tcOut:"1:20:06:01"},
-];
-const CAT_LABELS={voronka:"Воронки",fpv:"ФПВ дрон",vrezka:"Врезка",angar:"Ангар",puli:"Пули/Царапины",vzryv:"Взрыв/Сажа",dym:"Дым",other:"Другое"};
-const CAT_COLORS={voronka:"#d29922",fpv:"#bc8cff",vrezka:"#3fb950",angar:"#f0883e",puli:"#f778ba",vzryv:"#f85149",dym:"#8b949e",other:"#8b949e"};
+let TASKS=[];
+const CAT_LABELS={};
+const CAT_COLORS={};
 const _RAND_COLORS=["#e06c75","#e5c07b","#98c379","#56b6c2","#61afef","#c678dd","#d19a66","#be5046","#7ec8e3","#f0883e"];
-function _loadCustomCats(){const cc=state.__categories||{};Object.keys(cc).forEach(k=>{if(!CAT_LABELS[k])CAT_LABELS[k]=cc[k].label;if(!CAT_COLORS[k])CAT_COLORS[k]=cc[k].color;});}
+function _loadCustomCats(){const cc=state.__categories||{};Object.keys(cc).forEach(k=>{CAT_LABELS[k]=cc[k].label;CAT_COLORS[k]=cc[k].color;});}
 function _saveCustomCat(key,label,color){if(!state.__categories)state.__categories={};state.__categories[key]={label,color};}
 function _randCatColor(){return _RAND_COLORS[Math.floor(Math.random()*_RAND_COLORS.length)];}
 function getCat(id){return state[id]?.cat||TASKS.find(t=>t.id===id)?.cat||"other";}
@@ -1112,7 +1085,11 @@ function runMigrations(){let c=false;for(const[k,d]of Object.entries(state)){
   if(d.notes&&!d.adminNote){d.adminNote=d.notes;delete d.notes;c=true;}
   if(typeof d.artistNote==="string"&&d.artistNote){d.artistNotes=[{id:0,author:"artist",text:d.artistNote}];delete d.artistNote;c=true;}
   if(d.artistNotes){d.artistNotes.forEach((n,i)=>{if(n.id===undefined){n.id=i;c=true;}});}
-}if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+}
+if(!state.__tasks){state.__tasks=[];c=true;}
+if(!state.__categories){state.__categories={};c=true;}
+TASKS=state.__tasks;
+if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 runMigrations();
 if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}
 _loadCustomCats();
@@ -1276,6 +1253,8 @@ function toggleEditMode(){
   _editMode=!_editMode;
   const btn=document.getElementById("editModeBtn");
   if(btn){btn.classList.toggle("edit-active",_editMode);btn.textContent=_editMode?"Editing...":"Edit Shots";}
+  const addBtn=document.getElementById("addShotBtn");
+  if(addBtn)addBtn.style.display=(_editMode&&isAdmin())?'inline-block':'none';
   try{localStorage.setItem("em_"+(currentUser?currentUser.id:"guest"),_editMode?"1":"0");}catch(e){}
   // Force full rebuild so disabled states update
   const tbody=document.getElementById("tbody");if(tbody)tbody.dataset.ids="";
@@ -1285,8 +1264,60 @@ function _loadEditMode(){
   try{_editMode=localStorage.getItem("em_"+(currentUser?currentUser.id:"guest"))==="1";}catch(e){}
   const btn=document.getElementById("editModeBtn");
   if(btn){btn.classList.toggle("edit-active",_editMode);btn.textContent=_editMode?"Editing...":"Edit Shots";}
+  const addBtn=document.getElementById("addShotBtn");
+  if(addBtn)addBtn.style.display=(_editMode&&isAdmin())?'inline-block':'none';
 }
 function isEditMode(){return _editMode;}
+
+function openAddShotDialog(){
+  if(!isEditMode()||!isAdmin())return;
+  const catOpts=getAllCatKeys().map(k=>`<option value="${k}">${esc(getCatLabel(k))}</option>`).join('');
+  const ov=document.createElement("div");
+  ov.className="confirm-overlay";
+  ov.innerHTML=`<div class="confirm-box"><div class="confirm-title">Add Shot</div><div class="confirm-msg"><div style="display:flex;flex-direction:column;gap:12px">
+    <label>ID <input id="_as_id" style="width:100%;padding:6px;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:4px" placeholder="KH_01_XXX"></label>
+    <label>Description <input id="_as_desc" style="width:100%;padding:6px;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:4px" placeholder="Shot description"></label>
+    <label>Category <select id="_as_cat" style="padding:6px;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:4px">${catOpts}</select></label>
+    <div style="display:flex;gap:8px">
+      <label style="flex:1">TC In <input id="_as_tcin" style="width:100%;padding:6px;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:4px" placeholder="0:00:00:00"></label>
+      <label style="flex:1">TC Out <input id="_as_tcout" style="width:100%;padding:6px;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:4px" placeholder="0:00:00:00"></label>
+    </div>
+  </div></div><div class="confirm-btns"><button class="confirm-btn cancel" id="confirmNo">Cancel</button><button class="confirm-btn danger" style="background:#238636;border-color:#238636" id="confirmYes">Add</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#confirmYes").onclick=()=>{
+    const id=ov.querySelector('#_as_id').value.trim();
+    const desc=ov.querySelector('#_as_desc').value.trim();
+    const cat=ov.querySelector('#_as_cat').value;
+    const tcIn=ov.querySelector('#_as_tcin').value.trim()||'-:-:-:-';
+    const tcOut=ov.querySelector('#_as_tcout').value.trim()||'-:-:-:-';
+    ov.remove();
+    if(!id){_showAlert('Error','ID is required');return;}
+    if(TASKS.find(t=>t.id===id)){_showAlert('Error','Shot '+id+' already exists');return;}
+    TASKS.push({id,desc,cat,tcIn,tcOut});
+    state.__tasks=TASKS;
+    saveState(state);
+    const tbody=document.getElementById("tbody");if(tbody)tbody.dataset.ids="";
+    render();updateStats();
+  };
+  ov.querySelector("#confirmNo").onclick=()=>ov.remove();
+  ov.addEventListener("click",(e)=>{if(e.target===ov)ov.remove();});
+}
+async function deleteShot(id){
+  if(!isEditMode()||!isAdmin())return;
+  const ok=await _showConfirm('Delete Shot','Delete <b>'+esc(id)+'</b> and all its data?');
+  if(!ok)return;
+  const idx=TASKS.findIndex(t=>t.id===id);
+  if(idx>=0)TASKS.splice(idx,1);
+  state.__tasks=TASKS;
+  delete state[id];
+  if(state.__files&&state.__files[id])delete state.__files[id];
+  if(state.__chat&&state.__chat[id])delete state.__chat[id];
+  saveState(state);
+  try{await r2Delete('video/'+id+'.mp4');}catch(e){}
+  try{await r2Delete('thumbs/'+id+'.jpg');}catch(e){}
+  const tbody=document.getElementById("tbody");if(tbody)tbody.dataset.ids="";
+  render();updateStats();
+}
 
 function _buildArtistFilterBtns(){
   const wrap=document.getElementById("artistFilterBtns");
@@ -5332,7 +5363,7 @@ function _showConfirm(title,msg,yesLabel){
     const ov=document.createElement("div");
     ov.className="confirm-overlay";
     const btn=yesLabel||'Delete';
-    const btnClass=btn==='OK'?'confirm-btn cancel':'confirm-btn danger';
+    const btnClass=btn==='Delete'?'confirm-btn danger':btn==='Add'?'confirm-btn danger" style="background:#238636;border-color:#238636':'confirm-btn cancel';
     ov.innerHTML=`<div class="confirm-box"><div class="confirm-title">${title}</div><div class="confirm-msg">${msg}</div><div class="confirm-btns"><button class="confirm-btn cancel" id="confirmNo">Cancel</button><button class="${btnClass}" id="confirmYes">${btn}</button></div></div>`;
     document.body.appendChild(ov);
     ov.querySelector("#confirmYes").onclick=()=>{ov.remove();resolve(true);};
@@ -5729,6 +5760,7 @@ function _buildRow(r){
       <option value="skip" ${st==="skip"?"selected":""}>Skip</option></select></td>
     <td class="desc-cell admin-col${canEditAdminNote()&&isEditMode()?' editable':''}" ${canEditAdminNote()&&isEditMode()?`onclick="startEditAdmin('${r.id}',this,event)"`:''} data-tid="${r.id}">${an||'<span style="color:#484f58">...</span>'}</td>
     <td style="vertical-align:top;padding-top:32px"><div class="note-cell${cp.text?' has-text':''}${hasUnread(r.id)?' unread':' read'}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="cp-bubble cp-${l.role}">${esc(l.text)}</div>`).join(''):'<span style="color:#484f58;font-size:11px">...</span>'}</div></div></td>
+    ${isAdmin()&&isEditMode()?`<td style="text-align:center"><button style="background:#da3633;color:#fff;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:11px" onclick="event.stopPropagation();deleteShot('${r.id}')">✕</button></td>`:''}
   </tr>`;
 }
 
