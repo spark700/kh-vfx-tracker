@@ -636,8 +636,6 @@
   .pub-dup-btns button.primary:hover { background: #388bfd; }
 </style>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/web-streams-polyfill@3.3.3/dist/ponyfill.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
 <script src="ffmpeg/ffmpeg.js"></script>
 </head>
 <body>
@@ -5192,56 +5190,36 @@ async function _downloadAsZip(files,zipName){
   const panel=_showOperationProgress('Downloading & zipping',files.length);
   const fileStream=streamSaver.createWriteStream(zipName+'.zip');
   const writer=fileStream.getWriter();
-  const crc32tab=new Uint32Array(256);
-  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;crc32tab[n]=c;}
-  function crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=crc32tab[(c^buf[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
-  const encoder=new TextEncoder();
-  const centralDir=[];
-  let offset=0;
-  async function writeBytes(bytes){await writer.write(bytes instanceof Uint8Array?bytes:new Uint8Array(bytes));offset+=bytes.length;}
-  function makeU16(v){return[v&0xFF,(v>>8)&0xFF];}
-  function makeU32(v){return[v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF];}
+  const zip=new JSZip();
   for(const f of files){
     try{
       const resp=await fetch(f.url);
       if(!resp.ok)throw new Error('fetch failed');
-      const buf=new Uint8Array(await resp.arrayBuffer());
-      const nameBytes=encoder.encode(f.path);
-      const crc=crc32(buf);
-      const localHeader=new Uint8Array([
-        0x50,0x4B,0x03,0x04, 0x0A,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
-        ...makeU32(crc),...makeU32(buf.length),...makeU32(buf.length),
-        ...makeU16(nameBytes.length),...makeU16(0),...nameBytes
-      ]);
-      const localOffset=offset;
-      await writeBytes(localHeader);
-      const CHUNK=2*1024*1024;
-      for(let c=0;c<buf.length;c+=CHUNK){await writeBytes(buf.subarray(c,Math.min(c+CHUNK,buf.length)));}
-      centralDir.push({nameBytes,crc,size:buf.length,offset:localOffset});
+      zip.file(f.path,await resp.blob());
       ok++;
     }catch(e){}
     done++;
     _updateOperationProgress(panel,done,files.length,f.name||f.path);
   }
-  const cdOffset=offset;
-  for(const e of centralDir){
-    const cdEntry=new Uint8Array([
-      0x50,0x4B,0x01,0x02, 0x14,0x00, 0x0A,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
-      ...makeU32(e.crc),...makeU32(e.size),...makeU32(e.size),
-      ...makeU16(e.nameBytes.length),...makeU16(0),...makeU16(0),
-      ...makeU16(0),...makeU16(0),...makeU32(0x20),...makeU32(e.offset),...e.nameBytes
-    ]);
-    await writeBytes(cdEntry);
+  if(ok===0){
+    _removeOperationProgress(panel);
+    for(const f of files){
+      const a=document.createElement('a');
+      a.href=f.url;a.download=f.name;a.target='_blank';a.rel='noopener';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      await new Promise(r=>setTimeout(r,300));
+    }
+    return;
   }
-  const cdSize=offset-cdOffset;
-  const eocd=new Uint8Array([
-    0x50,0x4B,0x05,0x06, 0x00,0x00, 0x00,0x00,
-    ...makeU16(centralDir.length),...makeU16(centralDir.length),
-    ...makeU32(cdSize),...makeU32(cdOffset),
-    ...makeU16(0)
-  ]);
-  await writeBytes(eocd);
-  await writer.close();
+  _updateOperationLabel(panel,'Packing ZIP...');
+  const content=await zip.generateAsync({type:'blob',compression:'STORE'}, (meta)=>{
+    _updateOperationProgress(panel,Math.round(meta.percent),100,'Packing...');
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(content);
+  a.download=zipName+'.zip';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
   _removeOperationProgress(panel);
 }
 function _downloadFolderByName(id,name){
