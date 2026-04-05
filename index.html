@@ -2352,8 +2352,10 @@ function renderChat(){
   if(ta){
     // Accept file/folder drops from chat files panel
     ta.addEventListener("dragover",e=>{
-      if(e.dataTransfer.types.includes("text/x-file-move")||e.dataTransfer.types.includes("text/x-folder-move")||e.dataTransfer.types.includes("text/x-multi-move")){
-        e.preventDefault();e.dataTransfer.dropEffect="link";
+      // Accept any internal drag (grip handles set custom types)
+      const t=e.dataTransfer.types;
+      if(t.includes("text/x-file-move")||t.includes("text/x-folder-move")||t.includes("text/x-multi-move")||_cfDragging){
+        e.preventDefault();e.dataTransfer.dropEffect="copy";
         ta.classList.add("chat-drop-active");
       }
     });
@@ -2367,15 +2369,14 @@ function renderChat(){
       if(multi){try{links=JSON.parse(multi);}catch(ex){}}
       else if(file)links=[file];
       else if(folder)links=[folder+'/'];
-      if(links.length){
-        e.preventDefault();
-        const path=_filesPath.length?_filesPath.join('/')+'/':'';
-        const insert=links.map(n=>`[[file:${path}${n}]]`).join(' ');
-        const pos=ta.selectionStart;
-        ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
-        ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
-        ta.dispatchEvent(new Event("input"));
-      }
+      if(!links.length)return;
+      e.preventDefault();e.stopPropagation();
+      const path=_filesPath.length?_filesPath.join('/')+'/':'';
+      const insert=links.map(n=>`[[file:${path}${n}]]`).join(' ');
+      const pos=ta.selectionStart||0;
+      ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
+      ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
+      ta.dispatchEvent(new Event("input"));
     });
     ta.addEventListener("keydown",e=>{
       if(todoMode){
@@ -4022,11 +4023,9 @@ function _renderShotFiles(id){
         _cfDragging=true;
         const tipRow=row.closest('tr[data-tip]');
         if(_cfTipEl){
-          // Smoothly transition everything to drag state, then instant follow
-          _cfTipEl.style.transition='all 0.3s ease-out';
+          // Instant switch to drag state
           _cfTipEl.classList.add('drag-active');
           _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
-          setTimeout(()=>{if(_cfTipEl)_cfTipEl.style.transition='none';},300);
         } else if(tipRow){
           _showCfTipForRow(tipRow,true);
           if(_cfTipEl){_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
