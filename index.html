@@ -4088,7 +4088,47 @@ function _getFilesRoot(id){
   const rootFiles=(state[id]?.files?.['_root']||[]).map(f=>({
     name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key
   }));
-  return root.concat(userFolders).concat(rootFiles);
+  const readmeText=`# ${id} — File System Guide
+
+## Folder Structure
+
+source/
+  original/     Raw footage (sequences or single files)
+  preview/      Preview video of source
+  assets/       Assets for the shot (3D, textures, HDRIs, etc.)
+
+versions/
+  preview/      Version previews (video)
+  final/        Final renders (sequences or single files)
+
+## Naming Rules
+
+source/original:
+  Folder:  ${id}/
+  Frames:  ${id}_001.exr, ${id}_002.exr, ...
+
+source/preview:
+  File:    ${id}_prev.mp4
+
+source/assets:
+  File:    ${id}_{description}_asset###.ext
+  Example: ${id}_explosion_asset001.blend
+
+versions/preview:
+  File:    ${id}_prev_v001.mp4, ${id}_prev_v002.mp4, ...
+
+versions/final:
+  Folder:  ${id}_v001/
+  Frames:  ${id}_v001_001.exr, ${id}_v001_002.exr, ...
+  File:    ${id}_v001.mov
+
+## Supported Sequence Formats
+png, jpg, jpeg, exr, dpx, tif, tiff, tga, bmp, hdr, sgi, cin
+`;
+  const readmeBlob=new Blob([readmeText],{type:'text/plain'});
+  const readmeUrl=URL.createObjectURL(readmeBlob);
+  const readme={name:'README.txt',size:_formatSize(readmeText.length),_bytes:readmeText.length,date:'—',url:readmeUrl,locked:true};
+  return [readme].concat(root).concat(userFolders).concat(rootFiles);
 }
 function _formatSize(bytes){
   if(!bytes||bytes==='—')return '—';
@@ -4518,10 +4558,11 @@ function _renderShotFiles(id){
       const dlSvg=`<svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
       const dlBtn=f.url?(_chatFileMode?`<button class="f-dl" onclick="event.stopPropagation();_downloadFile('${esc(f.url)}','${esc(f.name)}')" title="Download">${dlSvg}</button>`:`<a class="f-dl" href="${f.url}" target="_blank" title="Download">${dlSvg}</a>`):'';
 
-      const fileDelBtn=canDel?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
+      const fileLocked=f.locked||isLocked;
+      const fileDelBtn=(canDel&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
       const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
-      const selAttr2=` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`;
-      const grip2=`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`;
+      const selAttr2=f.locked?'':(` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`);
+      const grip2=f.locked?`<span class="f-grip f-grip-locked">⠿</span>`:`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`;
       const fileTip=_buildFileTip(id,f.name,f.size||'',editCell,f.date||'',_fileIcon(f.name));
       html+=`<tr${selAttr2}${fileTip}>
         <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
