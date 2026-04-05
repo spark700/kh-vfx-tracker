@@ -653,6 +653,16 @@
   </div>
 </div>
 
+<div class="shot-overlay hidden" id="myFilesOverlay" onclick="if(event.target===this)closeMyFiles()">
+  <div class="shot-panel" style="max-width:700px;width:90vw">
+    <div class="shot-header">
+      <span class="shot-header-id">📁 My Files</span>
+      <span class="shot-header-desc" id="myFilesUser"></span>
+      <button class="shot-close" onclick="closeMyFiles()">&times;</button>
+    </div>
+    <div id="myFilesBody" style="padding:16px;max-height:70vh;overflow:auto"></div>
+  </div>
+</div>
 <div class="shot-overlay hidden" id="shotOverlay" onclick="if(event.target===this)closeShot()">
   <div class="shot-panel">
     <div class="shot-header">
@@ -1288,7 +1298,50 @@ function _loadEditMode(){
 function isEditMode(){return _editMode;}
 
 function openMyFiles(){
-  // TODO: open personal file browser for current user
+  if(!currentUser||isGuest())return;
+  document.getElementById("myFilesOverlay").classList.remove("hidden");
+  document.getElementById("myFilesUser").textContent=currentUser.display;
+  _myFilesPath=[];
+  _renderMyFiles();
+}
+function closeMyFiles(){
+  document.getElementById("myFilesOverlay").classList.add("hidden");
+}
+let _myFilesPath=[];
+function _renderMyFiles(){
+  const body=document.getElementById("myFilesBody");
+  if(!body)return;
+  const uid=currentUser?.id;
+  // Get shots assigned to this user (admin sees all)
+  const myShots=TASKS.filter(t=>isAdmin()?true:getAssignee(t.id)===uid);
+  if(_myFilesPath.length===0){
+    // Root: show shot folders
+    let html='<table class="files-table"><thead><tr><th>Shot</th><th>Category</th><th>Status</th><th>Files</th></tr></thead><tbody>';
+    for(const t of myShots){
+      const cat=getCat(t.id);const catCol=getCatColor(cat);
+      const st=getStatus(t.id);
+      const fileCount=Object.values(state[t.id]?.files||{}).reduce((s,arr)=>s+(arr?.length||0),0)+(state[t.id]?.versions?.length||0);
+      html+=`<tr style="cursor:pointer" onclick="_myFilesNav('${esc(t.id)}')">
+        <td style="color:#58a6ff;font-weight:600">📁 ${esc(t.id)}</td>
+        <td><span style="background:${catCol}22;color:${catCol};border:1px solid ${catCol}44;padding:2px 8px;border-radius:10px;font-size:11px">${esc(getCatLabel(cat))}</span></td>
+        <td><span class="s-${st}" style="font-size:11px">${st.toUpperCase()}</span></td>
+        <td style="color:#8b949e">${fileCount||'—'}</td>
+      </tr>`;
+    }
+    html+='</tbody></table>';
+    if(!myShots.length)html='<div style="text-align:center;color:#484f58;padding:40px">No shots assigned</div>';
+    body.innerHTML=html;
+  } else {
+    // Inside a shot — open shot files panel
+    const shotId=_myFilesPath[0];
+    closeMyFiles();
+    openShot(shotId);
+    switchShotTab('files');
+  }
+}
+function _myFilesNav(shotId){
+  _myFilesPath=[shotId];
+  _renderMyFiles();
 }
 function openAddShotDialog(){
   if(!isEditMode()||!isAdmin())return;
@@ -3204,7 +3257,7 @@ function saveNote(){
 }
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("noteOverlay").classList.contains("hidden"))closeNote();});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("shotOverlay").classList.contains("hidden"))closeShot();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!document.getElementById("myFilesOverlay").classList.contains("hidden")){closeMyFiles();return;}if(!document.getElementById("shotOverlay").classList.contains("hidden"))closeShot();}});
 
 const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
 const GIFS=new Set();
