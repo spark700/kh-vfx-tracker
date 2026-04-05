@@ -4321,9 +4321,9 @@ function _renderShotFiles(id){
       const delBtn=(!f.locked&&_canUpload(id))?`<button class="f-dl" onclick="event.stopPropagation();_deleteFolder('${id}','${esc(f.name)}')" title="Delete folder">🗑</button>`:'';
       const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:'';
       const editCell=id==='__admin'?'':_renderEditCell(id,f.name);
-      const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:(_chatFileMode?` data-locked-folder="1"`:'');
-      const selAttr=(!f.locked||_chatFileMode)?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
-      const grip=(!f.locked||_chatFileMode)?`<span class="f-grip${f.locked?' f-grip-locked':''}" draggable="true" data-drag-folder="${esc(f.name)}"${f.locked?' data-locked="1"':''}>⠿</span>`:'';
+      const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:` data-locked-folder="1"`;
+      const selAttr=` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`;
+      const grip=`<span class="f-grip${f.locked?' f-grip-locked':''}" draggable="true" data-drag-folder="${esc(f.name)}"${f.locked?' data-locked="1"':''}>⠿</span>`;
       const shareIcon=(id==='__admin'&&f.hasShare)?' 🔗':'';
       const _countFiles=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_countFiles(c.children||[]);else n++;}return n;};
       const _sumBytes=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sumBytes(c.children||[]);else n+=(c._bytes||0);}return n;};
@@ -4346,8 +4346,8 @@ function _renderShotFiles(id){
 
       const fileDelBtn=canDel?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
       const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
-      const selAttr2=(!isLocked||_chatFileMode)?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
-      const grip2=(!isLocked||_chatFileMode)?`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`:'';
+      const selAttr2=` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`;
+      const grip2=`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`;
       const fileTip=_buildFileTip(id,f.name,f.size||'',editCell,f.date||'',_fileIcon(f.name));
       html+=`<tr${selAttr2}${fileTip}>
         <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
@@ -5665,7 +5665,7 @@ function saveAdmin(tid,ta){
 }
 
 function setStatus(id,val,el){if(!canEditStatus(id))return;if(!state[id])state[id]={};state[id].status=val;saveState(state);el.className="status-select s-"+val;updateStats();}
-function setAssignee(id,val){if(!canAssign())return;if(!state[id])state[id]={};state[id].assignee=val;saveState(state);render();}
+function setAssignee(id,val){if(!isEditMode()||!canAssign())return;if(!state[id])state[id]={};state[id].assignee=val;saveState(state);render();}
 function sortTable(col){if(sortCol===col)sortAsc=!sortAsc;else{sortCol=col;sortAsc=true;}_updateSortArrows();render();}
 const _arrowCols=new Set([1,4,5]); // ID, TC In, TC Out
 function _updateSortArrows(){
