@@ -5825,9 +5825,9 @@ function _validateVersionFile(shotId,filename){
   if(bnLower!==idLower&&bnLower!==idLower+'_prev'){
     // Check if file belongs to ANOTHER known shot → hard block
     const isOtherShot=TASKS.some(t=>bnLower===t.id.toLowerCase()||bnLower===t.id.toLowerCase()+'_prev');
-    // Check if baseName looks like a shot ID pattern (e.g. KH_01_XXX)
-    const looksLikeShotId=/^[A-Z]{2,4}_\d{2}_\d{2,4}/i.test(baseName);
-    if(isOtherShot||(looksLikeShotId&&!isOtherShot)){
+    // Check if baseName is similar to any known shot ID (partial match, starts with)
+    const looksLikeKnownShot=TASKS.some(t=>{const tl=t.id.toLowerCase();return bnLower.startsWith(tl)||tl.startsWith(bnLower);});
+    if(isOtherShot||looksLikeKnownShot){
       // Definitely wrong shot — hard block
       const current=_highlightError(filename,[
         {text:baseName,error:true},
