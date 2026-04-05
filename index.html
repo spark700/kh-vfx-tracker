@@ -2985,14 +2985,29 @@ function _getFilesRoot(id){
     {name:"source",type:"folder",locked:true,children:sourceChildren},
     {name:"versions",type:"folder",locked:true,children:versionsChildren},
   ];
-  // user-created folders from state
+  // user-created folders from state (support nested paths)
   const userFolderData=state[id]?.userFolders||[];
-  const userFolders=userFolderData.map(uf=>{
+  const currentPrefix=_filesPath.length===0?'':_filesPath.join('/')+'/';
+  const userFolders=[];
+  const seenFolders=new Set();
+  for(const uf of userFolderData){
+    // Only show folders at current level
+    if(currentPrefix&&!uf.name.startsWith(currentPrefix))continue;
+    if(!currentPrefix&&uf.name.includes('/'))continue;// nested, skip at root
+    if(currentPrefix){
+      const rest=uf.name.substring(currentPrefix.length);
+      if(rest.includes('/'))continue;// deeper nested
+    }
+    const displayName=currentPrefix?uf.name.substring(currentPrefix.length):uf.name;
+    if(seenFolders.has(displayName))continue;
+    seenFolders.add(displayName);
+    // Count children: files + subfolders at next level
     const files=(state[id]?.files?.[uf.name]||[]).map(f=>({
       name:f.name,size:_formatSize(f.size),date:f.date||'—',url:CDN_BASE+'/'+f.r2key
     }));
-    return {name:uf.name,type:"folder",locked:false,children:files};
-  });
+    const subCount=userFolderData.filter(sf=>sf.name.startsWith(uf.name+'/')&&!sf.name.substring(uf.name.length+1).includes('/')).length;
+    userFolders.push({name:displayName,type:"folder",locked:false,children:files,_fullPath:uf.name,_subCount:subCount});
+  }
   // root-level files
   const rootFiles=(state[id]?.files?.['_root']||[]).map(f=>({
     name:f.name,size:_formatSize(f.size),date:f.date||'—',url:CDN_BASE+'/'+f.r2key
@@ -3143,7 +3158,7 @@ function _renderShotFiles(id){
       const grip=!f.locked?`<span class="f-grip" draggable="true" data-drag-folder="${esc(f.name)}">⠿</span>`:'';
       html+=`<tr${dropAttr}${selAttr}>
         <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}</td>
-        <td class="f-size">${f.children?.length||0} items</td>
+        <td class="f-size">${(f.children?.length||0)+(f._subCount||0)} items</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
         <td class="f-actions"><button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
@@ -3361,28 +3376,27 @@ function _createFolder(id){
   if(!name)return;
   if(!state[id])state[id]={};
   if(!state[id].userFolders)state[id].userFolders=[];
-  // only root-level user folders for now
-  if(_filesPath.length===0){
-    if(state[id].userFolders.some(f=>f.name===name))return;
-    state[id].userFolders.push({name});
-    _addFileHistory(id,'added',name,'');
-    saveState(state);
-  }
+  const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
+  if(state[id].userFolders.some(f=>f.name===fullPath))return;
+  state[id].userFolders.push({name:fullPath});
+  _addFileHistory(id,'added',name,fullPath);
+  saveState(state);
   _renderShotFiles(id);
 }
 async function _deleteFolder(id,name){
+  const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
   const ok=await _showConfirm('Delete folder?','Delete <b>'+esc(name)+'</b> and all files inside?');
   if(!ok)return;
   if(!state[id])return;
-  // delete files from R2
-  const files=state[id]?.files?.[name]||[];
-  for(const f of files){
-    if(f.r2key) await r2Delete(f.r2key).catch(()=>{});
+  // delete files from R2 (this folder + all nested)
+  const toDelete=state[id].userFolders?.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'))||[];
+  for(const uf of toDelete){
+    const files=state[id]?.files?.[uf.name]||[];
+    for(const f of files){if(f.r2key) await r2Delete(f.r2key).catch(()=>{});}
+    if(state[id].files) delete state[id].files[uf.name];
   }
-  // remove folder and file entries
-  if(state[id].userFolders) state[id].userFolders=state[id].userFolders.filter(f=>f.name!==name);
-  if(state[id].files) delete state[id].files[name];
-  _addFileHistory(id,'deleted',name,'');
+  if(state[id].userFolders) state[id].userFolders=state[id].userFolders.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/'));
+  _addFileHistory(id,'deleted',name,fullPath);
   saveState(state);
   _renderShotFiles(id);
 }
@@ -3394,7 +3408,7 @@ function _getCurrentStateKey(){
   if(_filesPath.length===0)return '_root';
   if(_filesPath.length>=2&&_filesPath[0]==='versions')return _filesPath.slice(0,2).join('/');
   if(_filesPath.length>=2&&_filesPath[0]==='source')return _filesPath.slice(0,2).join('/');
-  if(_filesPath.length>=1&&_filesPath[0]!=='source'&&_filesPath[0]!=='versions')return _filesPath[0];
+  if(_filesPath.length>=1&&_filesPath[0]!=='source'&&_filesPath[0]!=='versions')return _filesPath.join('/');
   return null;
 }
 // Detect if a file looks like it belongs to this shot (version preview or source)
@@ -3723,30 +3737,45 @@ async function _moveMultiple(id,names,targetFolder){
 }
 async function _moveFolder(id,folderName,targetFolder){
   if(folderName===targetFolder)return;
-  if(targetFolder==='..'&&_filesPath.length===0)return;// already at root
-  // Only works for user folders at root level for now
-  if(_filesPath.length!==0)return;
   if(!state[id]?.userFolders)return;
-  const idx=state[id].userFolders.findIndex(f=>f.name===folderName);
+  // Current full path of the folder
+  const currentPath=_filesPath.length===0?folderName:_filesPath.join('/')+'/'+folderName;
+  const idx=state[id].userFolders.findIndex(f=>f.name===currentPath);
   if(idx<0)return;
-  if(targetFolder==='..') return;// can't move root folder higher
 
-  // Move folder into another folder: remove from root userFolders,
-  // merge its files into target folder's files
-  const srcFiles=state[id]?.files?.[folderName]||[];
-  const destKey=targetFolder;
-  if(!state[id].files)state[id].files={};
-  if(!state[id].files[destKey])state[id].files[destKey]=[];
-  // Create subfolder concept: prefix file names or just merge
-  for(const f of srcFiles){
-    if(!state[id].files[destKey].some(ef=>ef.name===f.name)){
-      state[id].files[destKey].push(f);
-    }
+  let newPath;
+  if(targetFolder==='..'){
+    // Move up one level
+    const parts=currentPath.split('/');
+    if(parts.length<=1)return;// already at root
+    parts.splice(-2,1);// remove parent from path
+    newPath=parts.join('/');
+  } else {
+    // Move into target folder
+    const targetPath=_filesPath.length===0?targetFolder:_filesPath.join('/')+'/'+targetFolder;
+    newPath=targetPath+'/'+folderName;
   }
-  // Remove source folder
-  delete state[id].files[folderName];
-  state[id].userFolders.splice(idx,1);
-  _addFileHistory(id,'moved',folderName,'→ '+destKey);
+  // Check no duplicate at destination
+  if(state[id].userFolders.some(f=>f.name===newPath))return;
+  // Rename folder path
+  state[id].userFolders[idx].name=newPath;
+  // Rename files key
+  if(state[id].files?.[currentPath]){
+    state[id].files[newPath]=state[id].files[currentPath];
+    delete state[id].files[currentPath];
+  }
+  // Also rename any nested subfolders
+  state[id].userFolders.forEach(f=>{
+    if(f.name.startsWith(currentPath+'/')){
+      const oldKey=f.name;
+      f.name=newPath+f.name.substring(currentPath.length);
+      if(state[id].files?.[oldKey]){
+        state[id].files[f.name]=state[id].files[oldKey];
+        delete state[id].files[oldKey];
+      }
+    }
+  });
+  _addFileHistory(id,'moved',folderName,currentPath+' → '+newPath);
   saveState(state);
   _renderShotFiles(id);
 }
