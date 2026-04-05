@@ -2291,17 +2291,19 @@ function _chatTaDrop(e){
   const file=e.dataTransfer.getData("text/x-file-move");
   const folder=e.dataTransfer.getData("text/x-folder-move");
   const multi=e.dataTransfer.getData("text/x-multi-move");
+  console.log('[chatDrop]',{file,folder,multi,types:[...e.dataTransfer.types]});
   let links=[];
   if(multi){try{links=JSON.parse(multi);}catch(ex){}}
   else if(file)links=[file];
   else if(folder)links=[folder+'/'];
-  if(!links.length)return;
+  if(!links.length){console.log('[chatDrop] no links found');return;}
   const path=_filesPath.length?_filesPath.join('/')+'/':'';
   const insert=links.map(n=>`[[file:${path}${n}]]`).join(' ');
   const pos=ta.selectionStart||0;
   ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
   ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
   ta.dispatchEvent(new Event("input"));
+  console.log('[chatDrop] inserted:',insert);
 }
 function renderChat(){
   const chatMsgs=getChat(noteTaskId),canSend=canChat(noteTaskId);
@@ -4006,7 +4008,7 @@ function _renderShotFiles(id){
       } else {
         e.dataTransfer.setData(dataKey==='dragFile'?'text/x-file-move':'text/x-folder-move',name);
       }
-      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.effectAllowed="copyMove";
       // Hide native drag image
       const blank=document.createElement("img");
       blank.src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
