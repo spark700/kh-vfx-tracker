@@ -114,7 +114,7 @@
   .shot-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2500; display: flex; align-items: center; justify-content: center; gap: 12px; }
   .shot-overlay.hidden { display: none; }
   .shot-panel { width: 90vw; max-width: 1200px; max-height: 90vh; background: #161b22; border: 1px solid #30363d; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
-  .shot-panel.files-mode { height: 90vh; }
+  .shot-panel.files-mode { height: 90vh; max-width: 900px; }
   .shot-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px; }
   .shot-header-id { font-family: 'SF Mono', monospace; font-size: 18px; color: #58a6ff; font-weight: 600; }
   .shot-header-desc { color: #8b949e; font-size: 14px; flex: 1; }
@@ -160,7 +160,7 @@
   .files-table { width: 100%; border-collapse: collapse; }
   .files-table th { text-align: left; padding: 8px 10px; font-size: 11px; color: #8b949e; font-weight: 600; border-bottom: 1px solid #30363d; text-transform: uppercase; letter-spacing: .5px; }
   .files-table td { padding: 8px 10px; font-size: 13px; color: #c9d1d9; }
-  .files-table tr:not(.f-locked-sep) + tr:not(.f-locked-sep) td { border-top: 1px dashed #21262d; }
+  .files-table tr:not(.f-locked-sep) + tr:not(.f-locked-sep) td { border-top: 1px dashed #3a414a; }
   .files-table tr:hover td { background: #21262d; }
   .files-table .f-icon { font-size: 16px; margin-right: 6px; }
   .files-table .f-name { cursor: pointer; }
@@ -204,7 +204,7 @@
   .files-sel-bar button.sel-danger { color: #f85149; }
   .files-sel-bar button.sel-danger:hover { background: rgba(248,81,73,0.15); }
   .files-table tr.f-locked-sep td { background: transparent; border: hidden !important; padding: 0; }
-  .files-table tr.f-locked-sep hr { border: none; border-top: 1px solid #3a414a; margin: 8px 10px; }
+  .files-table tr.f-locked-sep hr { border: none; border-top: 1px solid #30363d; margin: 8px 10px; }
   .files-rect-sel { position: absolute; border: 1px solid rgba(88,166,255,0.5); background: rgba(88,166,255,0.08); pointer-events: none; z-index: 5; }
   .f-drag-ghost { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 9999; background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.08s ease-out; opacity: 0.92; }
   .files-empty { text-align: center; padding: 60px 20px; color: #484f58; }
