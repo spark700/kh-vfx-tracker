@@ -533,6 +533,23 @@
   .chat-msg { padding-top: 14px; }
   .chat-action-btn { background: none; border: none; color: #484f58; width: 32px; height: 32px; cursor: pointer; border-radius: 6px; font-size: 15px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; line-height: 1; }
   .chat-action-btn:hover { color: #c9d1d9; background: rgba(255,255,255,0.08); }
+  /* Chat multi-select */
+  .chat-select-mode .chat-msg { cursor: pointer; }
+  .chat-select-mode .chat-msg:hover { background: rgba(255,255,255,0.03); }
+  .chat-select-mode .chat-msg.selected { background: #1f6feb22; }
+  .chat-select-mode .chat-msg-actions { display: none !important; }
+  .chat-msg-checkbox { display: none; width: 18px; height: 18px; accent-color: #1f6feb; cursor: pointer; flex-shrink: 0; margin-top: 2px; }
+  .chat-select-mode .chat-msg-checkbox { display: block; }
+  .chat-msg-inner { display: flex; gap: 8px; }
+  .chat-msg-content { flex: 1; min-width: 0; }
+  .chat-select-bar { display: none; position: absolute; bottom: 0; left: 0; right: 0; background: #161b22; border-top: 1px solid #30363d; padding: 10px 16px; gap: 10px; align-items: center; z-index: 20; }
+  .chat-select-bar.visible { display: flex; }
+  .chat-select-bar .sel-count { color: #8b949e; font-size: 13px; }
+  .chat-select-bar button { padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; border: 1px solid; }
+  .chat-select-bar .sel-delete { background: #f8514933; border-color: #f85149; color: #f85149; }
+  .chat-select-bar .sel-delete:hover { background: #f8514955; }
+  .chat-select-bar .sel-cancel { background: #21262d; border-color: #30363d; color: #8b949e; }
+  .chat-select-bar .sel-cancel:hover { background: #30363d; color: #c9d1d9; }
   .chat-deleted-label { font-size: 11px; color: #484f58; }
   .chat-restore-btn { background: none; border: none; color: #3fb950; font-size: 11px; cursor: pointer; margin-left: 8px; text-decoration: underline; }
   .chat-restore-btn:hover { color: #56d364; }
@@ -735,6 +752,7 @@
       <button class="note-save-btn" onclick="saveNote()">Save</button>
     </div>
   </div>
+  <div class="chat-upload-queue" id="chatUploadQueue" style="display:none"></div>
 </div>
 
 <div class="header-row">
@@ -2726,17 +2744,22 @@ function renderChat(){
     }
     const isAdm=m.author==="admin",isCli=m.author==="client",cls=isAdm?"from-admin":isCli?"from-client":"from-artist";
     const del=m.deleted;
-    html+=`<div class="chat-msg ${cls}${del?' deleted':''}" data-mid="${m.id}">`;
+    const _sel=_chatSelected.has(m.id);
+    html+=`<div class="chat-msg ${cls}${del?' deleted':''}${_sel?' selected':''}" data-mid="${m.id}" onclick="_chatSelectMode?chatToggleSelect(${m.id},this):void(0)">`;
+    html+=`<div class="chat-msg-inner">`;
+    html+=`<input type="checkbox" class="chat-msg-checkbox" ${_sel?'checked':''} onclick="event.stopPropagation();chatToggleSelect(${m.id},this.closest('.chat-msg'))">`;
+    html+=`<div class="chat-msg-content">`;
     if(!isGuest()){
       const isOwn=(isAdmin()&&m.author==="admin")||(isArtist()&&m.author==="artist")||(isClient()&&m.author==="client");
       if(!del){
         html+=`<div class="chat-msg-actions">`;
-        if(canSend) html+=`<div class="chat-action-btn" onclick="replyTo(${m.id})" title="Reply">↩</div>`;
-        if(isOwn) html+=`<div class="chat-action-btn" onclick="editMsg(${m.id})" title="Edit">✎</div>`;
-        if(isAdmin()||isOwn) html+=`<div class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete">✕</div>`;
+        if(canSend) html+=`<div class="chat-action-btn" onclick="event.stopPropagation();replyTo(${m.id})" title="Reply">↩</div>`;
+        if(isOwn) html+=`<div class="chat-action-btn" onclick="event.stopPropagation();editMsg(${m.id})" title="Edit">✎</div>`;
+        if(isAdmin()||isOwn) html+=`<div class="chat-action-btn" onclick="event.stopPropagation();deleteMsg(${m.id})" title="Delete">✕</div>`;
+        html+=`<div class="chat-action-btn" onclick="event.stopPropagation();chatEnterSelectMode(${m.id})" title="Select">☐</div>`;
         html+=`</div>`;
       } else if(del&&isAdmin()){
-        html+=`<div class="chat-msg-actions"><div class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete permanently" style="color:#f85149">✕</div></div>`;
+        html+=`<div class="chat-msg-actions"><div class="chat-action-btn" onclick="event.stopPropagation();deleteMsg(${m.id})" title="Delete permanently" style="color:#f85149">✕</div></div>`;
       }
     }
     const timeStr=m.ts?new Date(m.ts).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
@@ -2745,17 +2768,17 @@ function renderChat(){
     if(m.replyTo!==undefined&&m.replyTo!==null){
       const orig=msgs.find(x=>x.id===m.replyTo);
       const preview=orig?(orig.deleted?'deleted message':trunc(orig.text,40)):'...';
-      html+=`<div class="chat-msg-reply" onclick="scrollToMsg(${m.replyTo})">${esc(preview)}</div>`;
+      html+=`<div class="chat-msg-reply" onclick="event.stopPropagation();scrollToMsg(${m.replyTo})">${esc(preview)}</div>`;
     }
     if(del){
       html+=`<span class="chat-deleted-label">message deleted</span>`;
-      if(isAdmin()) html+=`<button class="chat-restore-btn" onclick="restoreMsg(${m.id})">restore</button>`;
+      if(isAdmin()) html+=`<button class="chat-restore-btn" onclick="event.stopPropagation();restoreMsg(${m.id})">restore</button>`;
     } else {
       html+=renderMsgContent(m.text, m.id);
-      if(m.img)html+=`<img class="chat-msg-img" src="${esc(m.img)}" onclick="window.open('${esc(m.img)}','_blank')">`;
+      if(m.img)html+=`<img class="chat-msg-img" src="${esc(m.img)}" onclick="event.stopPropagation();window.open('${esc(m.img)}','_blank')">`;
       if(m.edited) html+=`<div class="chat-edited-mark">edited</div>`;
     }
-    html+=`</div>`;
+    html+=`</div></div></div>`;
   });
   html+='</div>';
   if(canSend){
@@ -2767,7 +2790,9 @@ function renderChat(){
     html+=`<div class="chat-hint">${todoMode?'Todo mode: each Shift+Enter = new item &nbsp;|&nbsp; Enter — send list':'Enter — send &nbsp;|&nbsp; Shift+Enter — new line &nbsp;|&nbsp; &#9745; — todo builder'}</div>`;
     html+=`</div>`;
   }
+  html+=`<div class="chat-select-bar${_chatSelectMode?' visible':''}" id="chatSelectBar"><span class="sel-count" id="chatSelCount">${_chatSelected.size} selected</span><button class="sel-delete" onclick="chatDeleteSelected()">Delete</button><button class="sel-cancel" onclick="chatExitSelectMode()">Cancel</button></div>`;
   body.innerHTML=html;
+  if(_chatSelectMode) body.closest('.note-panel-body,.note-panel')?.querySelector('.chat-messages')?.classList.add('chat-select-mode');
   // Auto-scroll to bottom
   setTimeout(()=>{const c=document.getElementById("chatMessages");if(c)c.scrollTop=c.scrollHeight;},30);
   // Bind Enter key
@@ -2900,6 +2925,54 @@ async function sendChat(){
   render();
 }
 
+/* ── Chat multi-select ── */
+let _chatSelectMode=false;
+const _chatSelected=new Set();
+
+function chatEnterSelectMode(mid){
+  _chatSelectMode=true;
+  _chatSelected.clear();
+  _chatSelected.add(mid);
+  const cm=document.getElementById("chatMessages");
+  if(cm)cm.classList.add("chat-select-mode");
+  renderChat();
+}
+
+function chatExitSelectMode(){
+  _chatSelectMode=false;
+  _chatSelected.clear();
+  const cm=document.getElementById("chatMessages");
+  if(cm)cm.classList.remove("chat-select-mode");
+  renderChat();
+}
+
+function chatToggleSelect(mid,el){
+  if(!_chatSelectMode) return;
+  if(_chatSelected.has(mid)) _chatSelected.delete(mid); else _chatSelected.add(mid);
+  if(el){el.classList.toggle("selected",_chatSelected.has(mid));const cb=el.querySelector('.chat-msg-checkbox');if(cb)cb.checked=_chatSelected.has(mid);}
+  const cnt=document.getElementById("chatSelCount");
+  if(cnt)cnt.textContent=_chatSelected.size+" selected";
+  if(_chatSelected.size===0) chatExitSelectMode();
+}
+
+function chatDeleteSelected(){
+  if(!_chatSelected.size)return;
+  const msgs=getChat(noteTaskId);
+  _chatSelected.forEach(mid=>{
+    const m=msgs.find(x=>x.id===mid);
+    if(!m)return;
+    if(m.deleted&&isAdmin()){
+      const idx=msgs.indexOf(m);if(idx>=0)msgs.splice(idx,1);
+    } else {
+      const isOwn=(isArtist()&&m.author==="artist")||(isClient()&&m.author==="client");
+      if(isAdmin()||isOwn){m.deletedText=m.text;m.deleted=true;m.text="";}
+    }
+  });
+  saveState(state);
+  _chatSelectMode=false;_chatSelected.clear();
+  renderChat();render();
+}
+
 function deleteMsg(mid){
   const msgs=getChat(noteTaskId);
   const m=msgs.find(x=>x.id===mid);
@@ -2977,7 +3050,7 @@ function scrollToMsg(mid){
   if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.style.outline="1px solid #484f58";setTimeout(()=>el.style.outline="",1500);}
 }
 
-function closeNote(){document.getElementById("noteOverlay").classList.add("hidden");document.getElementById("chatFilesPanel").style.display='none';_closeChatFiles();noteTaskId=null;noteType=null;replyToId=null;editingMsgId=null;todoMode=false;}
+function closeNote(){document.getElementById("noteOverlay").classList.add("hidden");document.getElementById("chatFilesPanel").style.display='none';_closeChatFiles();noteTaskId=null;noteType=null;replyToId=null;editingMsgId=null;todoMode=false;_chatSelectMode=false;_chatSelected.clear();}
 
 let _savedShotId=null,_savedFilesPath=null,_savedShotTab=null;
 function _renderChatFiles(shotId){
@@ -4240,8 +4313,8 @@ function _renderUploadQueue(){
   if(!panel){
     panel=document.createElement("div");panel.id="uploadQueuePanel";panel.className="upload-queue-panel";
     if(_chatFileMode){
-      const noteOv=document.getElementById("noteOverlay");
-      if(noteOv)noteOv.appendChild(panel);
+      const cq=document.getElementById("chatUploadQueue");
+      if(cq){cq.style.display='';cq.appendChild(panel);}
       else document.body.appendChild(panel);
     } else {
       const shotOv=document.getElementById("shotOverlay");
