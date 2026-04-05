@@ -2498,17 +2498,25 @@ function _navigateChatFile(path){
   if(!noteTaskId||noteType!=='chat')return;
   const parts=path.split('/');
   const fileName=parts.pop();
+  // Try to find current location of file in state
+  const id=noteTaskId;
+  let foundPath=parts;
+  if(id!=='__admin'){
+    const filesDict=state[id]?.files||{};
+    for(const [sk, files] of Object.entries(filesDict)){
+      if(files?.some(f=>f.name===fileName)){foundPath=sk==='_root'?[]:sk.split('/');break;}
+    }
+  }
   // Navigate to folder
-  _filesPath=[];
-  for(const p of parts)_filesPath.push(p);
-  _renderShotFiles(noteTaskId);
+  _filesPath=[...foundPath];
+  _renderShotFiles(id);
   // Highlight file after render
   setTimeout(()=>{
     const body=document.getElementById("chatFilesBody");
     if(!body)return;
     _clearSelection();
     _fileSelection.add(fileName);
-    _updateSelectionUI(noteTaskId);
+    _updateSelectionUI(id);
     // Scroll to selected row
     const row=body.querySelector(`tr[data-sel-name="${CSS.escape(fileName)}"]`);
     if(row)row.scrollIntoView({behavior:'smooth',block:'center'});
