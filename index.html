@@ -4296,7 +4296,7 @@ function _commitUploadedFile(item){
     if(!state[id].versions)state[id].versions=[];
     state[id].versions.push({name:item.meta.versionName,baseName:item.meta.baseName,url:CDN_BASE+'/'+item.r2Key,thumb:null,ts:Date.now(),size:item.size||0});
     // Generate thumb async (don't block queue)
-    const thumbKey="versions/"+id+"/thumb_"+item.meta.baseName+_formatVersion(item.meta.vNum)+".jpg";
+    const thumbKey="versions/"+id+"/thumb_"+item.meta.baseName+"_prev"+_formatVersion(item.meta.vNum)+".jpg";
     _generateThumbnail(CDN_BASE+"/"+item.r2Key,thumbKey).then(url=>{
       const v=state[id].versions.find(v=>v.name===item.meta.versionName);
       if(v)v.thumb=url;
@@ -4866,8 +4866,8 @@ function _detectVersionFile(shotId,filename){
   })();
   if(!isSimilar)return false;
 
-  // Has _v### → version preview
-  if(/_v\d{2,4}/i.test(noExt))return 'version';
+  // Has _prev_v### or _v### → version preview
+  if(/_prev_v\d{2,4}/i.test(noExt)||/_v\d{2,4}/i.test(noExt))return 'version';
 
   // Exact shotId match (no version suffix) → likely source or unversioned preview
   if(fileLower===shotLower)return 'source';
@@ -5528,7 +5528,7 @@ function _updateUploadUI(shotId){
 function _parseVersionName(filename){
   const ext=filename.split('.').pop()||'mp4';
   const noExt=filename.replace(/\.[^.]+$/,'');
-  const match=noExt.match(/^(.+?)_v(\d{3,4})$/i);
+  const match=noExt.match(/^(.+?)_prev_v(\d{3,4})$/i)||noExt.match(/^(.+?)_v(\d{3,4})$/i);
   return {baseName:match?match[1]:noExt, vNum:match?parseInt(match[2],10):0, ext};
 }
 function _getMaxVersion(shotId,baseName){
@@ -5554,10 +5554,12 @@ function _validateVersionFile(shotId,filename){
   const errors=[];
   const warnings=[];
   const nextV=_getMaxVersion(shotId,shotId)+1;
-  const correctName=shotId+_formatVersion(nextV)+'.'+ext;
+  const correctName=shotId+'_prev'+_formatVersion(nextV)+'.'+ext;
 
-  // 1. baseName must be exactly shotId
-  if(baseName.toLowerCase()!==shotId.toLowerCase()){
+  // 1. baseName must be shotId or shotId_prev
+  const bnLower=baseName.toLowerCase();
+  const idLower=shotId.toLowerCase();
+  if(bnLower!==idLower&&bnLower!==idLower+'_prev'){
     const current=_highlightError(filename,[
       {text:baseName,error:true},
       {text:vNum?_formatVersion(vNum):''},{text:'.'+ext}
@@ -5585,7 +5587,7 @@ function _validateVersionFile(shotId,filename){
       {text:_formatVersion(vNum),error:true},
       {text:'.'+ext}
     ]);
-    errors.push({type:'version_backwards',suggest:shotId+_formatVersion(maxV+1)+'.'+ext,current,detail:`Latest is <b>_v${String(maxV).padStart(3,'0')}</b>, next must be <b>_v${String(maxV+1).padStart(3,'0')}</b>+`});
+    errors.push({type:'version_backwards',suggest:shotId+'_prev'+_formatVersion(maxV+1)+'.'+ext,current,detail:`Latest is <b>_v${String(maxV).padStart(3,'0')}</b>, next must be <b>_v${String(maxV+1).padStart(3,'0')}</b>+`});
     return {ok:false,errors,warnings,baseName,vNum,ext};
   }
 
@@ -5594,7 +5596,7 @@ function _validateVersionFile(shotId,filename){
     warnings.push(`Large version gap: _v${String(maxV).padStart(3,'0')} → _v${String(vNum).padStart(3,'0')}`);
   }
 
-  return {ok:true,errors,warnings,baseName,vNum,ext,versionName:shotId+_formatVersion(vNum)+'.'+ext};
+  return {ok:true,errors,warnings,baseName,vNum,ext,versionName:shotId+'_prev'+_formatVersion(vNum)+'.'+ext};
 }
 
 async function uploadVersion(shotId,input){
