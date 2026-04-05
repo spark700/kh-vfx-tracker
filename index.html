@@ -906,6 +906,8 @@ function _initRealtime(){
             runMigrations();render();
             if(_gifCurrentId)renderPlayerNotes();
             if(noteTaskId&&noteType==='chat')renderChat();
+            if(_shotCurrentId&&_shotTab==='files')_renderShotFiles(_shotCurrentId);
+            if(_shotCurrentId&&_shotTab==='versions')_renderShotBody(_shotCurrentId);
           }
         }
       }catch(e){}
