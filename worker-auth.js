@@ -233,6 +233,48 @@ async function handleTgPush(request, env) {
   return _jsonResp({ ok: true, message_id: tgData.result?.message_id }, 200, origin);
 }
 
+// ── /tg/avatar — proxies a user's profile photo from Telegram ──
+// Public (no auth) so <img src="/tg/avatar?u=123"> works directly. The bot
+// token is kept on the worker side and never reaches the browser.
+async function handleTgAvatar(request, env) {
+  const url = new URL(request.url);
+  const userId = url.searchParams.get('u');
+  if (!userId || !/^\d+$/.test(userId)) {
+    return new Response('bad user id', { status: 400 });
+  }
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    return new Response('no token', { status: 500 });
+  }
+  try {
+    const photosResp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUserProfilePhotos?user_id=${userId}&limit=1`);
+    const photosJson = await photosResp.json();
+    if (!photosJson.ok || !photosJson.result || !photosJson.result.photos || !photosJson.result.photos.length) {
+      return new Response(null, { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });
+    }
+    // photos[0] is the most recent set, sorted by size ascending. Pick a
+    // mid-size variant for crisp 64x64 avatars without bloating.
+    const sizes = photosJson.result.photos[0];
+    const pick = sizes[Math.min(1, sizes.length - 1)] || sizes[0];
+    const fileResp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${pick.file_id}`);
+    const fileJson = await fileResp.json();
+    if (!fileJson.ok || !fileJson.result || !fileJson.result.file_path) {
+      return new Response(null, { status: 404 });
+    }
+    const cdnResp = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${fileJson.result.file_path}`);
+    if (!cdnResp.ok) return new Response(null, { status: 502 });
+    return new Response(cdnResp.body, {
+      status: 200,
+      headers: {
+        'Content-Type': cdnResp.headers.get('content-type') || 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  } catch (e) {
+    return new Response('error', { status: 500 });
+  }
+}
+
 // ── /tg/ping — health check used by the admin Bot Settings panel ──
 async function handleTgPing(request, env) {
   const origin = request.headers.get('Origin') || '';
@@ -272,6 +314,7 @@ async function handleTgPing(request, env) {
       username: u.username || null,
       first_name: u.first_name || null,
       last_name: u.last_name || null,
+      avatar_url: `https://killhouse-vfx.contora.workers.dev/tg/avatar?u=${u.id}`,
     };
   }
   if (hasToken) {
@@ -363,6 +406,9 @@ export default {
     }
     if (url.pathname === '/tg/ping') {
       return handleTgPing(request, env);
+    }
+    if (url.pathname === '/tg/avatar') {
+      return handleTgAvatar(request, env);
     }
 
     // Telegram link-preview / redirect for player deep links

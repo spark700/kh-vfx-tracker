@@ -86,11 +86,14 @@
   .user-card-tg-at { color: #58a6ff; font-size: 13px; font-family: 'SF Mono', monospace; }
   .user-card-tg-input { background: #0d1117; border: 1px solid #21262d; color: #c9d1d9; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', monospace; flex: 1; min-width: 0; }
   .user-card-tg-input:focus { border-color: #1f6feb; outline: none; }
-  .mention-dropdown { position: absolute; left: 0; right: 0; top: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.6); z-index: 100; max-height: 220px; overflow-y: auto; margin-top: 4px; }
+  .mention-dropdown { position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.7); z-index: 9999; max-height: 280px; overflow-y: auto; min-width: 280px; max-width: 360px; padding: 4px; }
   .mention-dropdown.hidden { display: none; }
-  .mention-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; color: #c9d1d9; }
-  .mention-item.active, .mention-item:hover { background: #1f6feb22; }
-  .mention-item .m-name { color: #c9d1d9; flex: 1; }
+  .mention-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; font-size: 13px; color: #c9d1d9; border-radius: 8px; }
+  .mention-item.active, .mention-item:hover { background: #1f6feb33; }
+  .mention-avatar { width: 36px; height: 36px; border-radius: 50%; background: #30363d; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #c9d1d9; overflow: hidden; }
+  .mention-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .mention-text { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+  .mention-item .m-name { color: #c9d1d9; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mention-item .m-at { color: #58a6ff; font-family: 'SF Mono', monospace; font-size: 11px; }
   .bot-discovered-list { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 4px; }
   .bot-discovered-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #161b22; }
@@ -878,7 +881,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0023</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0024</div>
 
 <script>
 const USERS = {
@@ -6410,22 +6413,39 @@ function _showAlert(title,msg){
 function _getMentionCandidates(){
   const out=[];
   const seen=new Set();
+  // Index discovered TG users by username for avatar lookup
+  const tgByUsername={};
+  for(const u of (state.__bot?.tgUsers||[])){
+    if(u.username)tgByUsername[u.username.toLowerCase()]=u;
+  }
   // Tracker users
   if(state.__users){
     for(const[id,u] of Object.entries(state.__users)){
       const tg=(u.telegram||'').replace(/^@/,'').trim();
       if(!tg||seen.has(tg.toLowerCase()))continue;
       seen.add(tg.toLowerCase());
-      out.push({username:tg,display:u.display||id,source:'user'});
+      const tgU=tgByUsername[tg.toLowerCase()];
+      out.push({
+        username:tg,
+        display:u.display||id,
+        avatar:tgU?.avatar_url||null,
+        tgId:tgU?.id||null,
+        source:'user'
+      });
     }
   }
-  // Cached discovered TG users
-  const cache=state.__bot?.tgUsers||[];
-  for(const u of cache){
+  // Cached discovered TG users not already added
+  for(const u of (state.__bot?.tgUsers||[])){
     if(!u.username||seen.has(u.username.toLowerCase()))continue;
     seen.add(u.username.toLowerCase());
     const name=[u.first_name,u.last_name].filter(Boolean).join(' ').trim()||u.username;
-    out.push({username:u.username,display:name,source:'tg'});
+    out.push({
+      username:u.username,
+      display:name,
+      avatar:u.avatar_url||null,
+      tgId:u.id||null,
+      source:'tg'
+    });
   }
   return out;
 }
@@ -6439,21 +6459,25 @@ function _showPushPrompt(title,subject){
   return new Promise((resolve)=>{
     const ov=document.createElement("div");
     ov.className="confirm-overlay";
-    ov.innerHTML=`<div class="confirm-box" style="min-width:420px"><div class="confirm-title">${esc(title)}</div><div class="confirm-msg" style="text-align:left"><div style="font-size:12px;color:#8b949e;margin-bottom:6px">Will be sent:</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;font-size:13px;color:#c9d1d9;margin-bottom:14px;white-space:pre-wrap;word-break:break-word">${esc(subject)}</div><div style="font-size:12px;color:#8b949e;margin-bottom:4px">Comment (optional, type <code style="background:#161b22;padding:1px 4px;border-radius:3px">@</code> to mention)</div><div style="position:relative"><textarea id="pushPromptTA" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px" placeholder="Add a note for the artist…"></textarea><div id="mentionDropdown" class="mention-dropdown hidden"></div></div></div><div class="confirm-btns"><button class="confirm-btn cancel" id="pushPromptCancel">Cancel</button><button class="confirm-btn danger" id="pushPromptSend" style="background:#d29922;border-color:#d29922">&#128276; Send</button></div></div>`;
+    ov.innerHTML=`<div class="confirm-box" style="min-width:420px;overflow:visible"><div class="confirm-title">${esc(title)}</div><div class="confirm-msg" style="text-align:left"><div style="font-size:12px;color:#8b949e;margin-bottom:6px">Will be sent:</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;font-size:13px;color:#c9d1d9;margin-bottom:14px;white-space:pre-wrap;word-break:break-word">${esc(subject)}</div><div style="font-size:12px;color:#8b949e;margin-bottom:4px">Comment (optional, type <code style="background:#161b22;padding:1px 4px;border-radius:3px">@</code> to mention)</div><textarea id="pushPromptTA" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px" placeholder="Add a note for the artist…"></textarea></div><div class="confirm-btns"><button class="confirm-btn cancel" id="pushPromptCancel">Cancel</button><button class="confirm-btn danger" id="pushPromptSend" style="background:#d29922;border-color:#d29922">&#128276; Send</button></div></div>`;
     document.body.appendChild(ov);
     const ta=ov.querySelector("#pushPromptTA");
-    const dd=ov.querySelector("#mentionDropdown");
+    // Floating dropdown lives at body level so it can overflow modal bounds.
+    const dd=document.createElement('div');
+    dd.className='mention-dropdown hidden';
+    dd.id='mentionDropdown';
+    document.body.appendChild(dd);
     setTimeout(()=>ta.focus(),50);
 
     // Mention autocomplete state
-    let mentionFilter=null; // null = inactive, '' or 'abc' = filter string
+    let mentionFilter=null;
     let mentionStart=-1;
     let mentionList=[];
     let mentionIdx=0;
+
     function updateMention(){
       const pos=ta.selectionStart;
       const text=ta.value.slice(0,pos);
-      // Find last @ that's at start or after whitespace, with no whitespace after
       const m=text.match(/(?:^|\s)@([\w_]*)$/);
       if(!m){hideDropdown();return;}
       mentionStart=pos-m[1].length-1;
@@ -6464,9 +6488,29 @@ function _showPushPrompt(title,subject){
       mentionIdx=0;
       renderDropdown();
     }
+    function _initials(s){
+      return String(s||'').trim().split(/\s+/).slice(0,2).map(p=>p[0]||'').join('').toUpperCase()||'?';
+    }
     function renderDropdown(){
-      dd.innerHTML=mentionList.map((c,i)=>`<div class="mention-item${i===mentionIdx?' active':''}" data-idx="${i}"><span class="m-name">${esc(c.display)}</span><span class="m-at">@${esc(c.username)}</span></div>`).join('');
+      dd.innerHTML=mentionList.map((c,i)=>{
+        const avatarHtml=c.avatar
+          ?`<div class="mention-avatar"><img src="${esc(c.avatar)}" onerror="this.parentElement.textContent='${esc(_initials(c.display))}'"></div>`
+          :`<div class="mention-avatar">${esc(_initials(c.display))}</div>`;
+        return `<div class="mention-item${i===mentionIdx?' active':''}" data-idx="${i}">${avatarHtml}<div class="mention-text"><span class="m-name">${esc(c.display)}</span><span class="m-at">@${esc(c.username)}</span></div></div>`;
+      }).join('');
       dd.classList.remove('hidden');
+      // Position above the textarea
+      const r=ta.getBoundingClientRect();
+      const ddH=Math.min(280,mentionList.length*54+8);
+      let left=r.left;
+      const ddW=Math.min(360,Math.max(280,r.width));
+      if(left+ddW>window.innerWidth-8)left=window.innerWidth-8-ddW;
+      if(left<8)left=8;
+      let top=r.top-ddH-8;
+      if(top<8)top=r.bottom+8; // fallback below if no room above
+      dd.style.left=left+'px';
+      dd.style.top=top+'px';
+      dd.style.width=ddW+'px';
       dd.querySelectorAll('.mention-item').forEach(el=>{
         el.addEventListener('mousedown',(e)=>{e.preventDefault();insertMention(parseInt(el.dataset.idx,10));});
       });
@@ -6495,8 +6539,9 @@ function _showPushPrompt(title,subject){
       updateMention();
     });
 
-    const send=()=>{const v=ta.value.trim();ov.remove();resolve(v);};
-    const cancel=()=>{ov.remove();resolve(null);};
+    const cleanup=()=>{ov.remove();dd.remove();};
+    const send=()=>{const v=ta.value.trim();cleanup();resolve(v);};
+    const cancel=()=>{cleanup();resolve(null);};
     ov.querySelector("#pushPromptSend").onclick=send;
     ov.querySelector("#pushPromptCancel").onclick=cancel;
     ov.addEventListener("click",(e)=>{if(e.target===ov)cancel();});
