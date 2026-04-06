@@ -825,7 +825,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0017</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0018</div>
 
 <script>
 const USERS = {
@@ -5911,6 +5911,7 @@ function _playVersion(id,idx){
   document.getElementById("gifOverlay").classList.remove("hidden");
   renderPlayerNotes();
   renderVersionsPanel();
+  _updatePlayerPushBtn();
   vid.src=v.url;vid.load();
   vid.addEventListener("loadedmetadata",()=>{
     const scrub=document.getElementById("gifScrubber");
