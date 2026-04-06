@@ -87,7 +87,7 @@ async function handleTgPush(request, env) {
   try { body = await request.json(); } catch (e) {
     return _jsonResp({ ok: false, error: 'bad_json' }, 400, origin);
   }
-  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken } = body || {};
+  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment } = body || {};
   if (!shotId || !artistId || !userId || !linkToken) {
     return _jsonResp({ ok: false, error: 'missing_fields' }, 400, origin);
   }
@@ -115,12 +115,16 @@ async function handleTgPush(request, env) {
   const safeDesc = _escapeHtml(shotDesc || '').slice(0, 120);
   const safeText = _escapeHtml((text || '').slice(0, 500));
   const safeFrom = _escapeHtml(fromUser || 'user');
+  const safeKind = _escapeHtml(kindLabel || kind || '');
+  const safeComment = _escapeHtml((comment || '').slice(0, 500));
   const safeLink = String(link || '').replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
   const headerLine = safeDesc ? `<b>${safeShot}</b> — ${safeDesc}` : `<b>${safeShot}</b>`;
-  const bodyLine = safeText ? `\n💬 «${safeText}»` : '';
-  const fromLine = `\nFrom: ${safeFrom}`;
+  const kindLine = safeKind ? `\n📦 Pushed: ${safeKind}` : '';
+  const fromLine = `\n👤 By: ${safeFrom}`;
+  const bodyLine = safeText ? `\n\n💬 «${safeText}»` : '';
+  const commentLine = safeComment ? `\n\n📝 ${safeComment}` : '';
   const linkLine = safeLink ? `\n\n<a href="${safeLink}">Open in tracker</a>` : '';
-  const msg = `🔔 ${headerLine}${fromLine}${bodyLine}${linkLine}`;
+  const msg = `🔔 ${headerLine}${kindLine}${fromLine}${bodyLine}${commentLine}${linkLine}`;
 
   // Send to Telegram
   const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;

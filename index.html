@@ -531,6 +531,8 @@
   .chat-msg.from-artist { background: #0a1929; color: #c9d1d9; margin-right: auto; border-bottom-left-radius: 3px; }
   .chat-msg.from-client { background: #1a1400; color: #d29922; margin-left: auto; border-bottom-right-radius: 3px; }
   .chat-msg.from-note { background: #0d1117; border: 1px solid #21262d; border-left: 3px solid #3fb950; color: #8b949e; margin-right: auto; font-size: 12px; opacity: 0.8; }
+  .chat-msg.from-system { background: transparent; max-width: 100%; margin: 4px auto; padding: 4px 8px; }
+  .chat-msg.from-system .chat-msg-system-text { font-size: 10px; color: #484f58; text-align: center; font-style: italic; }
   .chat-msg.deleted { opacity: 0.4; font-style: italic; }
   .chat-msg-header { font-size: 10px; font-weight: 600; margin-bottom: 4px; opacity: 0.7; }
   .chat-msg-reply { font-size: 12px; padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; border-left: 2px solid; cursor: pointer; }
@@ -823,7 +825,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0008</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0009</div>
 
 <script>
 const USERS = {
@@ -2922,6 +2924,11 @@ function renderChat(){
       html+=`</div></div></div>`;
       return;
     }
+    if(m.system){
+      const ts=m.ts?new Date(m.ts).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+      html+=`<div class="chat-msg from-system" data-mid="${m.id}"><div class="chat-msg-inner"><div class="chat-msg-content"><div class="chat-msg-system-text">&#128276; ${esc(m.text||'')}${ts?` <span style="opacity:0.5;margin-left:6px">${ts}</span>`:''}</div></div></div></div>`;
+      return;
+    }
     const isAdm=m.author==="admin",isCli=m.author==="client",cls=isAdm?"from-admin":isCli?"from-client":"from-artist";
     const del=m.deleted;
     const _sel=_chatSelected.has(m.id);
@@ -3180,6 +3187,11 @@ function _updatePushBtn(){
   btn.disabled=false;btn.title=`Push latest message to ${assignee}`;
 }
 
+function _appendSystemChatMsg(shotId,text){
+  if(!state[shotId])state[shotId]={};
+  if(!state[shotId].artistNotes)state[shotId].artistNotes=[];
+  state[shotId].artistNotes.push({id:nextMsgId(shotId),author:"system",text,ts:Date.now(),system:true});
+}
 async function pushChatNotification(){
   if(!noteTaskId)return;
   if(!_canPushChat(noteTaskId)){alert("No permission");return;}
@@ -3188,7 +3200,7 @@ async function pushChatNotification(){
   if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
-  const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted);
+  const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
   let msg=null,isSelected=false;
   if(_chatSelected.size>1){alert("Select only one message");return;}
   if(_chatSelected.size===1){
@@ -3206,19 +3218,24 @@ async function pushChatNotification(){
     if(!chat.length){alert("No messages to push");return;}
     msg=chat[chat.length-1];
   }
-  const text=msg.text||(msg.img?"[image]":"");
+  const msgText=msg.text||(msg.img?"[image]":"");
+  const subject=`Chat message in ${noteTaskId}\n\n«${msgText}»`;
+  const comment=await _showPushPrompt("Push to Telegram",subject);
+  if(comment===null)return; // cancelled
   const desc=getDesc(noteTaskId,(TASKS.find(t=>t.id===noteTaskId)?.desc)||"");
   const fromUser=currentUser.display||currentUser.id;
   const link=`https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(noteTaskId)}`;
+  const kindLabel=isSelected?"selected message":"latest message";
   const btn=document.getElementById("notePushBtn");
   const lbl=document.getElementById("notePushLabel");
-  if(btn){btn.disabled=true;}if(lbl)lbl.textContent='Sending…';
+  if(btn)btn.disabled=true;if(lbl)lbl.textContent='Sending…';
   try{
     const r=await fetch(TG_PUSH_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        shotId:noteTaskId,shotDesc:desc,artistId:assignee,text,fromUser,link,
+        shotId:noteTaskId,shotDesc:desc,artistId:assignee,
+        kind:"chat",kindLabel,text:msgText,comment,fromUser,link,
         userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
       })
     });
@@ -3228,6 +3245,9 @@ async function pushChatNotification(){
     if(!state[noteTaskId])state[noteTaskId]={};
     if(isSelected){msg.pushed=true;msg.pushedBy=currentUser.id;msg.pushedAt=Date.now();}
     else{state[noteTaskId].chatLastPush=Date.now();}
+    // Leave a system note in the chat
+    const sysText=`Pushed ${kindLabel} to Telegram by ${fromUser}${comment?` — "${comment}"`:""}`;
+    _appendSystemChatMsg(noteTaskId,sysText);
     saveState(state);
     renderChat();
     if(lbl)lbl.textContent='Sent ✓';
@@ -3274,10 +3294,12 @@ async function pushPlayerNotification(){
   const pushed=state[_gifCurrentId]?.playerPushed||{};
   if(pushed[key]){alert("Already pushed for this version");return;}
   const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
+  const subject=`Video in ${_gifCurrentId}\n\nVersion: ${versionLabel}`;
+  const comment=await _showPushPrompt("Push video to Telegram",subject);
+  if(comment===null)return;
   const desc=getDesc(_gifCurrentId,(TASKS.find(t=>t.id===_gifCurrentId)?.desc)||"");
   const fromUser=currentUser.display||currentUser.id;
   const link=`https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
-  const text=`Version: ${versionLabel}`;
   const btn=document.getElementById("playerPushBtn");
   const lbl=document.getElementById("playerPushLabel");
   if(btn)btn.disabled=true;if(lbl)lbl.textContent='Sending…';
@@ -3286,7 +3308,8 @@ async function pushPlayerNotification(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,text,fromUser,link,
+        shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,
+        kind:"video",kindLabel:`video (${versionLabel})`,text:`Version: ${versionLabel}`,comment,fromUser,link,
         userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
       })
     });
@@ -3295,6 +3318,9 @@ async function pushPlayerNotification(){
     if(!state[_gifCurrentId])state[_gifCurrentId]={};
     if(!state[_gifCurrentId].playerPushed)state[_gifCurrentId].playerPushed={};
     state[_gifCurrentId].playerPushed[key]={by:currentUser.id,at:Date.now()};
+    // System note in chat
+    const sysText=`Pushed video (${versionLabel}) to Telegram by ${fromUser}${comment?` — "${comment}"`:""}`;
+    _appendSystemChatMsg(_gifCurrentId,sysText);
     saveState(state);
     renderVersionsPanel();
     if(lbl)lbl.textContent='Sent ✓';
@@ -6003,6 +6029,23 @@ function _showAlert(title,msg){
     document.body.appendChild(ov);
     ov.querySelector("#confirmOk").onclick=()=>{ov.remove();resolve();};
     ov.addEventListener("click",(e)=>{if(e.target===ov){ov.remove();resolve();}});
+  });
+}
+// Push prompt: shows what will be sent + optional comment field. Returns trimmed comment string or null on cancel.
+function _showPushPrompt(title,subject){
+  return new Promise((resolve)=>{
+    const ov=document.createElement("div");
+    ov.className="confirm-overlay";
+    ov.innerHTML=`<div class="confirm-box" style="min-width:380px"><div class="confirm-title">${esc(title)}</div><div class="confirm-msg" style="text-align:left"><div style="font-size:12px;color:#8b949e;margin-bottom:6px">Will be sent:</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;font-size:13px;color:#c9d1d9;margin-bottom:14px;white-space:pre-wrap;word-break:break-word">${esc(subject)}</div><div style="font-size:12px;color:#8b949e;margin-bottom:4px">Comment (optional):</div><textarea id="pushPromptTA" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px" placeholder="Add a note for the artist…"></textarea></div><div class="confirm-btns"><button class="confirm-btn cancel" id="pushPromptCancel">Cancel</button><button class="confirm-btn danger" id="pushPromptSend" style="background:#d29922;border-color:#d29922">&#128276; Send</button></div></div>`;
+    document.body.appendChild(ov);
+    const ta=ov.querySelector("#pushPromptTA");
+    setTimeout(()=>ta.focus(),50);
+    const send=()=>{const v=ta.value.trim();ov.remove();resolve(v);};
+    const cancel=()=>{ov.remove();resolve(null);};
+    ov.querySelector("#pushPromptSend").onclick=send;
+    ov.querySelector("#pushPromptCancel").onclick=cancel;
+    ov.addEventListener("click",(e)=>{if(e.target===ov)cancel();});
+    ta.addEventListener("keydown",(e)=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();send();}if(e.key==='Escape'){e.preventDefault();cancel();}});
   });
 }
 async function deleteVersion(id,idx){
