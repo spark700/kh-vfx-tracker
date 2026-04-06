@@ -900,7 +900,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0035</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0036</div>
 
 <script>
 const USERS = {
@@ -3614,18 +3614,24 @@ function _updatePushBtn(){
   if(!assignee){btn.disabled=true;btn.title="No assignee";return;}
   const selSize=_chatSelected.size;
   if(selSize>1){btn.disabled=true;btn.title="Select only one message";return;}
+  const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
+  const playerNotes=_collectPlayerNotes(noteTaskId);
   // Admins: skip "already pushed" / 60s cooldown — they always have a push button
   if(isAdmin()){
     if(selSize===1){btn.disabled=false;btn.title=`Push selected message to ${assignee}`;return;}
-    const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
-    if(!chat.length){btn.disabled=true;btn.title="No messages to push";return;}
-    btn.disabled=false;btn.title=`Push latest message to ${assignee}`;
+    if(!chat.length&&!playerNotes.length){btn.disabled=true;btn.title="No messages to push";return;}
+    btn.disabled=false;
+    btn.title=chat.length?`Push latest message to ${assignee}`:`Select a player note and click Push`;
     return;
   }
   // Artists: keep once-per-message rule + 60s cooldown
   if(selSize===1){
     const mid=[..._chatSelected][0];
-    const m=(state[noteTaskId]?.artistNotes||[]).find(x=>x.id===mid);
+    // Player notes don't have lifetime "pushed" lockout
+    if(typeof mid==='string'&&mid.startsWith('pn_')){
+      btn.disabled=false;btn.title=`Push selected note to ${assignee}`;return;
+    }
+    const m=chat.find(x=>x.id===mid);
     if(m&&m.pushed){btn.disabled=true;btn.title="Already pushed";return;}
     btn.disabled=false;btn.title=`Push selected message to ${assignee}`;
     return;
@@ -3637,9 +3643,9 @@ function _updatePushBtn(){
     btn.disabled=true;btn.title=`Wait ${remain}s before next push`;
     return;
   }
-  const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
-  if(!chat.length){btn.disabled=true;btn.title="No messages to push";return;}
-  btn.disabled=false;btn.title=`Push latest message to ${assignee}`;
+  if(!chat.length&&!playerNotes.length){btn.disabled=true;btn.title="No messages to push";return;}
+  btn.disabled=false;
+  btn.title=chat.length?`Push latest message to ${assignee}`:`Select a player note and click Push`;
 }
 
 function _appendSystemChatMsg(shotId,text){
@@ -3684,7 +3690,12 @@ async function pushChatNotification(){
         alert(`Wait ${remain}s`);return;
       }
     }
-    if(!chat.length){alert("No messages to push");return;}
+    if(!chat.length){
+      // Only player notes available — user must select one explicitly
+      const playerNotes=_collectPlayerNotes(noteTaskId);
+      if(playerNotes.length){alert("Select a player note above and click Push again");return;}
+      alert("No messages to push");return;
+    }
     msg=chat[chat.length-1];
   }
   const msgText=msg.text||(msg.img?"[image]":"");
