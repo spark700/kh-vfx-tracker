@@ -499,11 +499,12 @@
   .note-type-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px; border-radius: 4px; }
   .note-type-badge.admin-badge { background: #3d0000; color: #f85149; }
   .note-type-badge.artist-badge { background: #0a1929; color: #58a6ff; }
-  .note-push-btn { background: none; border: 1px solid #d29922; color: #d29922; font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: 4px; line-height: 1; transition: .15s; display: flex; align-items: center; gap: 4px; }
-  .note-push-btn:hover:not(:disabled) { background: #d2992233; }
-  .note-push-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: #484f58; color: #484f58; }
-  .note-push-btn.hidden { display: none !important; }
+  .note-push-btn, .player-push-btn { background: none; border: 1px solid #d29922; color: #d29922; font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: 4px; line-height: 1; transition: .15s; display: inline-flex; align-items: center; gap: 4px; }
+  .note-push-btn:hover:not(:disabled), .player-push-btn:hover:not(:disabled) { background: #d2992233; }
+  .note-push-btn:disabled, .player-push-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: #484f58; color: #484f58; }
+  .note-push-btn.hidden, .player-push-btn.hidden { display: none !important; }
   .chat-msg-pushed-mark { font-size: 10px; color: #d29922; margin-left: 6px; opacity: 0.8; }
+  .pv-pushed-mark { font-size: 9px; color: #d29922; margin-left: 4px; }
   .note-panel-close { background: none; border: none; color: #484f58; font-size: 24px; cursor: pointer; padding: 4px 8px; border-radius: 4px; line-height: 1; }
   .note-panel-close:hover { color: #c9d1d9; background: #21262d; }
   .note-panel-meta { padding: 12px 24px; font-size: 13px; color: #8b949e; border-bottom: 1px solid #21262d; flex-shrink: 0; }
@@ -689,7 +690,10 @@
 <div class="gif-overlay hidden" id="gifOverlay" onclick="if(event.target===this)closeGif()">
   <button class="gif-close-btn" onclick="closeGif()">&times;</button>
   <div class="gif-player-area" id="gifPlayerArea">
-    <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff;margin-bottom:8px;align-self:flex-start"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;align-self:flex-start">
+      <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff"></div>
+      <button class="player-push-btn hidden" id="playerPushBtn" onclick="pushPlayerNotification()" title="Push current version to Telegram">&#128276; <span id="playerPushLabel">Push</span></button>
+    </div>
     <div class="player-with-notes">
       <div class="player-video-col">
         <div class="video-with-versions">
@@ -819,7 +823,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0007</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0008</div>
 
 <script>
 const USERS = {
@@ -848,6 +852,7 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   if(mfb)mfb.style.display=isGuest()?'none':'block';
   render();
   _handleChatDeepLink();
+  _handlePlayerDeepLink();
 }
 
 function _handleChatDeepLink(){
@@ -861,6 +866,22 @@ function _handleChatDeepLink(){
   // Verify shot exists
   if(!TASKS.some(t=>t.id===chatId)){console.warn("Chat deep link: shot not found",chatId);return;}
   setTimeout(()=>openNote(chatId,'chat'),100);
+}
+
+function _handlePlayerDeepLink(){
+  const params=new URLSearchParams(window.location.search);
+  const playerId=params.get('player');
+  if(!playerId)return;
+  const vRaw=params.get('v');
+  const vIdx=vRaw!==null&&vRaw!==undefined?parseInt(vRaw,10):null;
+  // Strip from URL
+  params.delete('player');params.delete('v');
+  const newSearch=params.toString();
+  window.history.replaceState({},'',window.location.pathname+(newSearch?'?'+newSearch:''));
+  if(!TASKS.some(t=>t.id===playerId)){console.warn("Player deep link: shot not found",playerId);return;}
+  // Pre-cache the desired version so openGif picks it up
+  if(vIdx!==null&&!isNaN(vIdx))_setPlayerCache(playerId,vIdx);
+  setTimeout(()=>openGif(playerId),100);
 }
 function logout(){_clearPersistedUser();currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
 // Auto-login deferred until after SUPA_URL is defined (see below)
@@ -3219,6 +3240,72 @@ async function pushChatNotification(){
   }
 }
 
+/* ── Player Telegram Push ── */
+function _versionKey(idx){return idx<0?'src':String(idx);}
+function _versionLabel(id,idx){
+  if(idx<0)return 'Source';
+  const v=(state[id]?.versions||[])[idx];
+  if(!v)return 'v'+(idx+1);
+  return v.name||('v'+(idx+1));
+}
+function _updatePlayerPushBtn(){
+  const btn=document.getElementById("playerPushBtn");
+  if(!btn)return;
+  const lbl=document.getElementById("playerPushLabel");
+  if(lbl)lbl.textContent='Push';
+  if(!_gifCurrentId||!_canPushChat(_gifCurrentId)){btn.classList.add('hidden');return;}
+  btn.classList.remove('hidden');
+  const assignee=getAssignee(_gifCurrentId);
+  if(!assignee){btn.disabled=true;btn.title="No assignee";return;}
+  const key=_versionKey(_gifVersionIdx);
+  const pushed=state[_gifCurrentId]?.playerPushed||{};
+  if(pushed[key]){btn.disabled=true;btn.title="Already pushed for this version";return;}
+  btn.disabled=false;btn.title=`Push current version to ${assignee}`;
+}
+async function pushPlayerNotification(){
+  if(!_gifCurrentId)return;
+  if(!_canPushChat(_gifCurrentId)){alert("No permission");return;}
+  const assignee=getAssignee(_gifCurrentId);
+  if(!assignee){alert("No artist assigned");return;}
+  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+    alert("Your account has no link token. Ask admin to regenerate.");return;
+  }
+  const key=_versionKey(_gifVersionIdx);
+  const pushed=state[_gifCurrentId]?.playerPushed||{};
+  if(pushed[key]){alert("Already pushed for this version");return;}
+  const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
+  const desc=getDesc(_gifCurrentId,(TASKS.find(t=>t.id===_gifCurrentId)?.desc)||"");
+  const fromUser=currentUser.display||currentUser.id;
+  const link=`https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
+  const text=`Version: ${versionLabel}`;
+  const btn=document.getElementById("playerPushBtn");
+  const lbl=document.getElementById("playerPushLabel");
+  if(btn)btn.disabled=true;if(lbl)lbl.textContent='Sending…';
+  try{
+    const r=await fetch(TG_PUSH_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,text,fromUser,link,
+        userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
+      })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.ok)throw new Error(data.error||('HTTP '+r.status));
+    if(!state[_gifCurrentId])state[_gifCurrentId]={};
+    if(!state[_gifCurrentId].playerPushed)state[_gifCurrentId].playerPushed={};
+    state[_gifCurrentId].playerPushed[key]={by:currentUser.id,at:Date.now()};
+    saveState(state);
+    renderVersionsPanel();
+    if(lbl)lbl.textContent='Sent ✓';
+    setTimeout(()=>{_updatePlayerPushBtn();},1500);
+  }catch(e){
+    console.error("Player push failed:",e);
+    alert("Push failed: "+(e.message||e));
+    _updatePlayerPushBtn();
+  }
+}
+
 function _canDeleteSelected(mid){
   if(typeof mid==="string"&&mid.startsWith("pn_")) return isAdmin();
   const msgs=getChat(noteTaskId);
@@ -3498,6 +3585,7 @@ function openGif(id){
 
   vid.addEventListener("loadedmetadata",_onReady,{once:true});
   if(vid.readyState>=1)_onReady();
+  _updatePlayerPushBtn();
 }
 
 function closeGif(){
@@ -5751,9 +5839,11 @@ function renderVersionsPanel(){
   if(shotLabel)shotLabel.textContent=_gifCurrentId;
   const versions=state[_gifCurrentId]?.versions||[];
   const origNotes=state[_gifCurrentId]?.playerNotes?.length||0;
+  const pushed=state[_gifCurrentId]?.playerPushed||{};
   let html=`<div class="pv-item${_gifVersionIdx<0?' active':''}" onclick="switchVersion(-1)" title="Original source">`;
   html+=`<span class="pv-dot" style="background:#3fb950"></span>`;
   html+=`<span class="pv-label">Source</span>`;
+  if(pushed['src'])html+=`<span class="pv-pushed-mark" title="Pushed to Telegram">&#128276;</span>`;
   if(origNotes)html+=`<span class="pv-notes-badge">${origNotes}</span>`;
   html+=`</div>`;
   versions.forEach((v,i)=>{
@@ -5765,6 +5855,7 @@ function renderVersionsPanel(){
     html+=`<div class="pv-item${_gifVersionIdx===i?' active':''}" onclick="switchVersion(${i})" title="${esc(name)}">`;
     html+=`<span class="pv-dot" style="background:#58a6ff"></span>`;
     html+=`<span class="pv-label">${esc(short)}</span>`;
+    if(pushed[String(i)])html+=`<span class="pv-pushed-mark" title="Pushed to Telegram">&#128276;</span>`;
     if(n)html+=`<span class="pv-notes-badge">${n}</span>`;
     html+=`</div>`;
   });
@@ -5799,6 +5890,7 @@ function switchVersion(idx){
   },{once:true});
   renderPlayerNotes();
   renderVersionsPanel();
+  _updatePlayerPushBtn();
 }
 function _showConfirm(title,msg,yesLabel){
   return new Promise((resolve)=>{
