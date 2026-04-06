@@ -261,9 +261,19 @@ async function handleTgPing(request, env) {
       if (!isNaN(v) && v > 0) effectiveThreads[k] = v;
     }
   } catch (e) {}
-  // Discover topic names from recent updates (24h window).
-  // Maps thread_id (number) → topic name.
+  // Discover topic names AND Telegram users from recent updates (24h window).
   const topicNames = {};
+  const tgUsersMap = {}; // user_id → { id, username, first_name, last_name }
+  function _captureUser(u) {
+    if (!u || !u.id) return;
+    if (tgUsersMap[u.id]) return;
+    tgUsersMap[u.id] = {
+      id: u.id,
+      username: u.username || null,
+      first_name: u.first_name || null,
+      last_name: u.last_name || null,
+    };
+  }
   if (hasToken) {
     try {
       // Use offset=0 so we never advance the queue and the same updates remain
@@ -274,19 +284,27 @@ async function handleTgPing(request, env) {
         for (const u of j.result) {
           const m = u.message || u.edited_message || u.channel_post;
           if (!m) continue;
-          // Direct topic creation event
+          // Topic name discovery
           if (m.forum_topic_created && m.message_thread_id) {
             topicNames[m.message_thread_id] = m.forum_topic_created.name;
           }
-          // Reply chains often quote the topic creation message
           const rt = m.reply_to_message;
           if (rt && rt.forum_topic_created && rt.message_thread_id) {
             topicNames[rt.message_thread_id] = rt.forum_topic_created.name;
+          }
+          // User discovery — message senders + reply targets
+          _captureUser(m.from);
+          if (rt) _captureUser(rt.from);
+          // Mentions (@username) in entities
+          const entities = (m.entities || []).concat(m.caption_entities || []);
+          for (const ent of entities) {
+            if (ent.type === 'text_mention' && ent.user) _captureUser(ent.user);
           }
         }
       }
     } catch (e) {}
   }
+  const tgUsers = Object.values(tgUsersMap);
   return _jsonResp({
     ok: true,
     workerAlive: true,
@@ -296,6 +314,7 @@ async function handleTgPing(request, env) {
     threads: effectiveThreads,
     hardcodedThreads: ARTIST_THREADS,
     topicNames,
+    tgUsers,
   }, 200, origin);
 }
 

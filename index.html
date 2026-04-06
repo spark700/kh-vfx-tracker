@@ -79,6 +79,22 @@
   .user-card-top .u-del { background: none; border: none; color: #30363d; cursor: pointer; font-size: 16px; }
   .user-card-top .u-del:hover { color: #f85149; }
   .user-card-bottom { display: flex; gap: 6px; flex-wrap: wrap; }
+  .user-card-tg { display: flex; align-items: center; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #161b22; }
+  .user-card-tg-label { font-size: 10px; text-transform: uppercase; color: #484f58; font-weight: 600; margin-right: 6px; }
+  .user-card-tg-at { color: #58a6ff; font-size: 13px; font-family: 'SF Mono', monospace; }
+  .user-card-tg-input { background: #0d1117; border: 1px solid #21262d; color: #c9d1d9; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', monospace; flex: 1; min-width: 0; }
+  .user-card-tg-input:focus { border-color: #1f6feb; outline: none; }
+  .mention-dropdown { position: absolute; left: 0; right: 0; top: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.6); z-index: 100; max-height: 220px; overflow-y: auto; margin-top: 4px; }
+  .mention-dropdown.hidden { display: none; }
+  .mention-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; color: #c9d1d9; }
+  .mention-item.active, .mention-item:hover { background: #1f6feb22; }
+  .mention-item .m-name { color: #c9d1d9; flex: 1; }
+  .mention-item .m-at { color: #58a6ff; font-family: 'SF Mono', monospace; font-size: 11px; }
+  .bot-discovered-list { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 4px; }
+  .bot-discovered-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #161b22; }
+  .bot-discovered-item:last-child { border-bottom: none; }
+  .bot-discovered-item .m-name { color: #c9d1d9; flex: 1; }
+  .bot-discovered-item .m-at { color: #58a6ff; font-family: 'SF Mono', monospace; font-size: 11px; }
   .u-btn { display: inline-flex; align-items: center; gap: 5px; background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: .15s; font-family: inherit; }
   .u-btn:hover { border-color: #58a6ff; color: #c9d1d9; }
   .u-btn code { font-family: 'SF Mono', monospace; font-size: 11px; color: #c9d1d9; }
@@ -860,7 +876,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0020</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0021</div>
 
 <script>
 const USERS = {
@@ -1855,11 +1871,24 @@ function _renderUserList(){
     if(lt){
       html+=`<button class="u-btn" onclick="copyAuthLink('${id}');this.classList.add('copied');this.querySelector('.ul').textContent='Copied!';setTimeout(()=>{this.classList.remove('copied');this.querySelector('.ul').textContent='Login Link';},1000)" title="Copy login link">🔗 <span class="ul">Login Link</span></button>`;
     }
-    html+=`</div></div>`;
+    html+=`</div>`;
+    // Telegram username field
+    const tg=state.__users?.[id]?.telegram||u.telegram||"";
+    html+=`<div class="user-card-tg"><span class="user-card-tg-label">Telegram</span><span class="user-card-tg-at">@</span><input type="text" class="user-card-tg-input" value="${esc(tg.replace(/^@/,''))}" placeholder="username" onchange="setUserTelegram('${id}',this.value)" oninput="setUserTelegram('${id}',this.value,true)"></div>`;
+    html+=`</div>`;
   });
   return html;
 }
 function closeUserManager(){const d=document.getElementById("artistManagerOverlay");if(d)d.remove();}
+function setUserTelegram(id,val,silent){
+  if(!state.__users)state.__users={};
+  if(!state.__users[id])state.__users[id]={};
+  const clean=String(val||'').trim().replace(/^@/,'');
+  if(clean)state.__users[id].telegram=clean;
+  else delete state.__users[id].telegram;
+  if(USERS[id])USERS[id].telegram=clean||undefined;
+  if(!silent)saveState(state);
+}
 
 /* ── BOT SETTINGS PANEL ── */
 function _getBotConfig(){
@@ -1933,6 +1962,17 @@ function _renderBotSettings(){
     html+=`<tr><td>${esc(a.display)}<div class="bot-artist-id">${esc(a.id)}${fallbackHint}</div></td><td><select class="bot-topic-select" data-artist="${esc(a.id)}">${optsHtml}</select> ${tidLabel}</td><td><button class="bot-test-btn" onclick="_testBotPush('${esc(a.id)}')">Test</button></td></tr>`;
   });
   html+=`</tbody></table><div style="margin-top:8px;text-align:right"><button class="bot-test-btn" onclick="_refreshBotStatus()">↻ Refresh</button></div></div>`;
+  // ── DISCOVERED TELEGRAM USERS ──
+  const discovered=_botPingData&&_botPingData!=='error'?(_botPingData.tgUsers||[]):[];
+  if(discovered.length){
+    html+=`<div class="bot-section"><div class="bot-section-title">Discovered Telegram Users</div><div class="bot-section-hint">Pulled from recent activity. Use these handles in <b>Manage Users → Telegram</b> to enable @-mentions in pushes.</div><div class="bot-discovered-list">`;
+    discovered.forEach(u=>{
+      const name=[u.first_name,u.last_name].filter(Boolean).join(' ').trim()||u.username||('user '+u.id);
+      const at=u.username?`@${esc(u.username)}`:`<span style="color:#484f58">no username</span>`;
+      html+=`<div class="bot-discovered-item"><span class="m-name">${esc(name)}</span><span class="m-at">${at}</span></div>`;
+    });
+    html+=`</div></div>`;
+  }
   // ── COOLDOWNS ──
   html+=`<div class="bot-section"><div class="bot-section-title">Cooldowns</div><div class="bot-section-hint">Time before the same person can push again.</div><div class="bot-cd-row"><label>Artist (no selection)</label><input type="number" id="cdArtist" value="${cd.artistMs/1000}" min="0" step="1"><span>seconds</span></div><div class="bot-cd-row"><label>Admin (debounce)</label><input type="number" id="cdAdmin" value="${cd.adminMs/1000}" min="0" step="0.1"><span>seconds</span></div></div>`;
   html+=`<div class="bot-actions"><button class="bot-cancel-btn" onclick="closeBotSettings()">Cancel</button><button class="bot-save-btn" onclick="_saveBotSettings()">Save</button></div>`;
@@ -1957,6 +1997,15 @@ async function _refreshBotStatus(){
     const d=await r.json();
     if(!d.ok)throw new Error(d.error||'unknown');
     _botPingData=d;
+    // Cache discovered Telegram users into state for the @-autocomplete
+    if(Array.isArray(d.tgUsers)&&d.tgUsers.length){
+      const cfg=_getBotConfig();
+      const byUsername={};
+      for(const u of (cfg.tgUsers||[])){if(u.username)byUsername[u.username.toLowerCase()]=u;}
+      for(const u of d.tgUsers){if(u.username)byUsername[u.username.toLowerCase()]=u;}
+      cfg.tgUsers=Object.values(byUsername);
+      saveState(state);
+    }
   }catch(e){
     _botPingData='error';
   }
@@ -6279,21 +6328,109 @@ function _showAlert(title,msg){
     ov.addEventListener("click",(e)=>{if(e.target===ov){ov.remove();resolve();}});
   });
 }
-// Push prompt: shows what will be sent + optional comment field. Returns trimmed comment string or null on cancel.
+// Returns merged list of @username candidates for the autocomplete:
+// — tracker users with state.__users[id].telegram set
+// — Telegram users discovered via /tg/ping (cached in state.__bot.tgUsers)
+function _getMentionCandidates(){
+  const out=[];
+  const seen=new Set();
+  // Tracker users
+  if(state.__users){
+    for(const[id,u] of Object.entries(state.__users)){
+      const tg=(u.telegram||'').replace(/^@/,'').trim();
+      if(!tg||seen.has(tg.toLowerCase()))continue;
+      seen.add(tg.toLowerCase());
+      out.push({username:tg,display:u.display||id,source:'user'});
+    }
+  }
+  // Cached discovered TG users
+  const cache=state.__bot?.tgUsers||[];
+  for(const u of cache){
+    if(!u.username||seen.has(u.username.toLowerCase()))continue;
+    seen.add(u.username.toLowerCase());
+    const name=[u.first_name,u.last_name].filter(Boolean).join(' ').trim()||u.username;
+    out.push({username:u.username,display:name,source:'tg'});
+  }
+  return out;
+}
+
+// Push prompt: shows what will be sent + optional comment field with
+// @username autocomplete. Returns trimmed comment string or null on cancel.
 function _showPushPrompt(title,subject){
   return new Promise((resolve)=>{
     const ov=document.createElement("div");
     ov.className="confirm-overlay";
-    ov.innerHTML=`<div class="confirm-box" style="min-width:380px"><div class="confirm-title">${esc(title)}</div><div class="confirm-msg" style="text-align:left"><div style="font-size:12px;color:#8b949e;margin-bottom:6px">Will be sent:</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;font-size:13px;color:#c9d1d9;margin-bottom:14px;white-space:pre-wrap;word-break:break-word">${esc(subject)}</div><div style="font-size:12px;color:#8b949e;margin-bottom:4px">Comment (optional):</div><textarea id="pushPromptTA" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px" placeholder="Add a note for the artist…"></textarea></div><div class="confirm-btns"><button class="confirm-btn cancel" id="pushPromptCancel">Cancel</button><button class="confirm-btn danger" id="pushPromptSend" style="background:#d29922;border-color:#d29922">&#128276; Send</button></div></div>`;
+    ov.innerHTML=`<div class="confirm-box" style="min-width:420px"><div class="confirm-title">${esc(title)}</div><div class="confirm-msg" style="text-align:left"><div style="font-size:12px;color:#8b949e;margin-bottom:6px">Will be sent:</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;font-size:13px;color:#c9d1d9;margin-bottom:14px;white-space:pre-wrap;word-break:break-word">${esc(subject)}</div><div style="font-size:12px;color:#8b949e;margin-bottom:4px">Comment (optional, type <code style="background:#161b22;padding:1px 4px;border-radius:3px">@</code> to mention)</div><div style="position:relative"><textarea id="pushPromptTA" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px" placeholder="Add a note for the artist…"></textarea><div id="mentionDropdown" class="mention-dropdown hidden"></div></div></div><div class="confirm-btns"><button class="confirm-btn cancel" id="pushPromptCancel">Cancel</button><button class="confirm-btn danger" id="pushPromptSend" style="background:#d29922;border-color:#d29922">&#128276; Send</button></div></div>`;
     document.body.appendChild(ov);
     const ta=ov.querySelector("#pushPromptTA");
+    const dd=ov.querySelector("#mentionDropdown");
     setTimeout(()=>ta.focus(),50);
+
+    // Mention autocomplete state
+    let mentionFilter=null; // null = inactive, '' or 'abc' = filter string
+    let mentionStart=-1;
+    let mentionList=[];
+    let mentionIdx=0;
+    function updateMention(){
+      const pos=ta.selectionStart;
+      const text=ta.value.slice(0,pos);
+      // Find last @ that's at start or after whitespace, with no whitespace after
+      const m=text.match(/(?:^|\s)@([\w_]*)$/);
+      if(!m){hideDropdown();return;}
+      mentionStart=pos-m[1].length-1;
+      mentionFilter=m[1].toLowerCase();
+      const all=_getMentionCandidates();
+      mentionList=all.filter(c=>c.username.toLowerCase().startsWith(mentionFilter)||c.display.toLowerCase().includes(mentionFilter)).slice(0,8);
+      if(!mentionList.length){hideDropdown();return;}
+      mentionIdx=0;
+      renderDropdown();
+    }
+    function renderDropdown(){
+      dd.innerHTML=mentionList.map((c,i)=>`<div class="mention-item${i===mentionIdx?' active':''}" data-idx="${i}"><span class="m-name">${esc(c.display)}</span><span class="m-at">@${esc(c.username)}</span></div>`).join('');
+      dd.classList.remove('hidden');
+      dd.querySelectorAll('.mention-item').forEach(el=>{
+        el.addEventListener('mousedown',(e)=>{e.preventDefault();insertMention(parseInt(el.dataset.idx,10));});
+      });
+    }
+    function hideDropdown(){
+      mentionFilter=null;mentionStart=-1;mentionList=[];
+      dd.classList.add('hidden');
+    }
+    function insertMention(i){
+      const c=mentionList[i];
+      if(!c)return;
+      const before=ta.value.slice(0,mentionStart);
+      const after=ta.value.slice(ta.selectionStart);
+      const insert='@'+c.username+' ';
+      ta.value=before+insert+after;
+      const newPos=before.length+insert.length;
+      ta.setSelectionRange(newPos,newPos);
+      hideDropdown();
+      ta.focus();
+    }
+
+    ta.addEventListener('input',updateMention);
+    ta.addEventListener('click',updateMention);
+    ta.addEventListener('keyup',(e)=>{
+      if(['ArrowDown','ArrowUp','Enter','Tab','Escape'].includes(e.key))return;
+      updateMention();
+    });
+
     const send=()=>{const v=ta.value.trim();ov.remove();resolve(v);};
     const cancel=()=>{ov.remove();resolve(null);};
     ov.querySelector("#pushPromptSend").onclick=send;
     ov.querySelector("#pushPromptCancel").onclick=cancel;
     ov.addEventListener("click",(e)=>{if(e.target===ov)cancel();});
-    ta.addEventListener("keydown",(e)=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();send();}if(e.key==='Escape'){e.preventDefault();cancel();}});
+    ta.addEventListener("keydown",(e)=>{
+      if(mentionList.length){
+        if(e.key==='ArrowDown'){e.preventDefault();mentionIdx=(mentionIdx+1)%mentionList.length;renderDropdown();return;}
+        if(e.key==='ArrowUp'){e.preventDefault();mentionIdx=(mentionIdx-1+mentionList.length)%mentionList.length;renderDropdown();return;}
+        if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();insertMention(mentionIdx);return;}
+        if(e.key==='Escape'){e.preventDefault();hideDropdown();return;}
+      }
+      if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();send();return;}
+      if(e.key==='Escape'){e.preventDefault();cancel();}
+    });
   });
 }
 async function deleteVersion(id,idx){
