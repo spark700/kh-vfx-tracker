@@ -327,6 +327,12 @@
   .confirm-btn.cancel:hover { background: #30363d; }
   .confirm-btn.danger { background: #da3633; color: #fff; }
   .confirm-btn.danger:hover { background: #f85149; }
+  .vud-status-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 12px 16px; background: linear-gradient(180deg, #1f6feb 0%, #1158c7 100%); color: #fff; border: 1px solid #58a6ff; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.15s; box-shadow: 0 2px 6px rgba(31,111,235,0.3); font-family: inherit; }
+  .vud-status-btn:hover:not(:disabled) { background: linear-gradient(180deg, #388bfd 0%, #1f6feb 100%); border-color: #79c0ff; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(31,111,235,0.45); }
+  .vud-status-btn:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 3px rgba(31,111,235,0.3); }
+  .vud-status-btn.vud-status-done { background: #161b22; border-color: #3fb950; color: #3fb950; cursor: default; box-shadow: none; }
+  .vud-status-btn.vud-status-done:hover { transform: none; box-shadow: none; }
+  .vud-status-btn b { font-weight: 800; }
   td.tc-cell { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #8b949e; white-space: nowrap; }
   td.desc-cell { max-width: 400px; word-break: break-word; white-space: normal; }
   td.gif-cell { width: 80px; padding: 6px; }
@@ -881,7 +887,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0027</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0028</div>
 
 <script>
 const USERS = {
@@ -3712,9 +3718,9 @@ function _showVersionUploadedDialog(shotId,versionIdx){
   const ov=document.createElement("div");
   ov.className="confirm-overlay";
   const statusBtnHtml=currentStatus==='review'
-    ? `<button id="vudStatusBtn" class="confirm-btn cancel" disabled style="opacity:0.5">✓ Already in Review</button>`
-    : `<button id="vudStatusBtn" class="confirm-btn cancel" style="background:#1f6feb22;border-color:#1f6feb;color:#58a6ff">→ Set status: Review</button>`;
-  ov.innerHTML=`<div class="confirm-box" style="min-width:420px"><div class="confirm-title">Version uploaded</div><div class="confirm-msg" style="text-align:left"><div style="font-size:13px;color:#c9d1d9;margin-bottom:6px"><b>${esc(shotId)}</b> · <span style="color:#58a6ff">${esc(versionName)}</span></div><div style="font-size:12px;color:#8b949e;margin-bottom:14px">Notify the team about this new version?</div><div style="display:flex;gap:8px;flex-direction:column">${statusBtnHtml}</div></div><div class="confirm-btns"><button class="confirm-btn cancel" id="vudClose">Close</button><button class="confirm-btn danger" id="vudPush" style="background:#d29922;border-color:#d29922">&#128276; Push to Telegram</button></div></div>`;
+    ? `<button id="vudStatusBtn" class="vud-status-btn vud-status-done" disabled>✓ Already in Review</button>`
+    : `<button id="vudStatusBtn" class="vud-status-btn">→ Change status to <b>Review</b></button>`;
+  ov.innerHTML=`<div class="confirm-box" style="min-width:440px"><div class="confirm-title">Version uploaded</div><div class="confirm-msg" style="text-align:left"><div style="font-size:13px;color:#c9d1d9;margin-bottom:6px"><b>${esc(shotId)}</b> · <span style="color:#58a6ff">${esc(versionName)}</span></div><div style="font-size:12px;color:#8b949e;margin-bottom:8px">Quick actions:</div><div style="display:flex;gap:8px;flex-direction:column">${statusBtnHtml}</div></div><div class="confirm-btns"><button class="confirm-btn cancel" id="vudClose">Close</button><button class="confirm-btn danger" id="vudPush" style="background:#d29922;border-color:#d29922">&#128276; Push to Telegram</button></div></div>`;
   document.body.appendChild(ov);
   const cleanup=()=>ov.remove();
   ov.querySelector("#vudClose").onclick=cleanup;
@@ -3728,8 +3734,8 @@ function _showVersionUploadedDialog(shotId,versionIdx){
       updateStats();
       render();
       statusBtn.disabled=true;
-      statusBtn.style.opacity='0.5';
-      statusBtn.textContent='✓ Status changed to Review';
+      statusBtn.classList.add('vud-status-done');
+      statusBtn.innerHTML='✓ Status changed to Review';
     };
   }
   ov.querySelector("#vudPush").onclick=async ()=>{
