@@ -825,7 +825,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0009</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0010</div>
 
 <script>
 const USERS = {
@@ -3268,6 +3268,11 @@ function _versionLabel(id,idx){
   if(!v)return 'v'+(idx+1);
   return v.name||('v'+(idx+1));
 }
+function _extractVersionNumber(name){
+  if(!name)return '';
+  const m=String(name).match(/_v(\d{3,4})/i);
+  return m?('v'+m[1]):'';
+}
 function _updatePlayerPushBtn(){
   const btn=document.getElementById("playerPushBtn");
   if(!btn)return;
@@ -3294,7 +3299,16 @@ async function pushPlayerNotification(){
   const pushed=state[_gifCurrentId]?.playerPushed||{};
   if(pushed[key]){alert("Already pushed for this version");return;}
   const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
-  const subject=`Video in ${_gifCurrentId}\n\nVersion: ${versionLabel}`;
+  const versionNumber=_gifVersionIdx<0?'Source':(_extractVersionNumber(versionLabel)||('v'+(_gifVersionIdx+1)));
+  // Resolve video URL (public R2 CDN URL)
+  let videoUrl;
+  if(_gifVersionIdx<0){
+    videoUrl=CDN_BASE+"/video/"+_gifCurrentId+"_prev.mp4";
+  } else {
+    const v=(state[_gifCurrentId]?.versions||[])[_gifVersionIdx];
+    videoUrl=v?.url||'';
+  }
+  const subject=`${_gifCurrentId} ${versionNumber}\n${versionLabel}`;
   const comment=await _showPushPrompt("Push video to Telegram",subject);
   if(comment===null)return;
   const desc=getDesc(_gifCurrentId,(TASKS.find(t=>t.id===_gifCurrentId)?.desc)||"");
@@ -3309,7 +3323,8 @@ async function pushPlayerNotification(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,
-        kind:"video",kindLabel:`video (${versionLabel})`,text:`Version: ${versionLabel}`,comment,fromUser,link,
+        kind:"video",versionNumber,videoUrl,
+        comment,fromUser,link,
         userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
       })
     });
@@ -3319,7 +3334,7 @@ async function pushPlayerNotification(){
     if(!state[_gifCurrentId].playerPushed)state[_gifCurrentId].playerPushed={};
     state[_gifCurrentId].playerPushed[key]={by:currentUser.id,at:Date.now()};
     // System note in chat
-    const sysText=`Pushed video (${versionLabel}) to Telegram by ${fromUser}${comment?` — "${comment}"`:""}`;
+    const sysText=`Pushed video (${versionNumber}) to Telegram by ${fromUser}${comment?` — "${comment}"`:""}`;
     _appendSystemChatMsg(_gifCurrentId,sysText);
     saveState(state);
     renderVersionsPanel();

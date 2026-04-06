@@ -87,7 +87,7 @@ async function handleTgPush(request, env) {
   try { body = await request.json(); } catch (e) {
     return _jsonResp({ ok: false, error: 'bad_json' }, 400, origin);
   }
-  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment } = body || {};
+  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, videoUrl, versionNumber } = body || {};
   if (!shotId || !artistId || !userId || !linkToken) {
     return _jsonResp({ ok: false, error: 'missing_fields' }, 400, origin);
   }
@@ -117,16 +117,58 @@ async function handleTgPush(request, env) {
   const safeFrom = _escapeHtml(fromUser || 'user');
   const safeKind = _escapeHtml(kindLabel || kind || '');
   const safeComment = _escapeHtml((comment || '').slice(0, 500));
+  const safeVersion = _escapeHtml(versionNumber || '');
   const safeLink = String(link || '').replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
+  const linkLine = safeLink ? `\n\n<a href="${safeLink}">Open in tracker</a>` : '';
+
+  // ── VIDEO PUSH: send actual video file with caption ──
+  if (kind === 'video' && videoUrl && /^https?:\/\//.test(videoUrl)) {
+    const videoHeader = safeVersion ? `<b>${safeShot}</b> ${safeVersion}` : `<b>${safeShot}</b>`;
+    const videoCaption = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}${linkLine}`;
+    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendVideo`;
+    const tgResp = await fetch(tgUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TG_CHAT_ID,
+        message_thread_id: threadId,
+        video: videoUrl,
+        caption: videoCaption,
+        parse_mode: 'HTML',
+        supports_streaming: true,
+      }),
+    });
+    const tgData = await tgResp.json().catch(() => ({}));
+    if (tgResp.ok && tgData.ok) {
+      return _jsonResp({ ok: true, mode: 'video', message_id: tgData.result?.message_id }, 200, origin);
+    }
+    // Fallback: send as plain text with link if sendVideo failed (e.g. >20MB)
+    const fallbackMsg = `🔔 ${videoHeader}\n👤 By: ${safeFrom}\n\n🎬 ${_escapeHtml(videoUrl)}${safeComment ? `\n\n📝 ${safeComment}` : ''}${linkLine}\n\n<i>(video too large for direct delivery, link above)</i>`;
+    const fbResp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TG_CHAT_ID,
+        message_thread_id: threadId,
+        text: fallbackMsg,
+        parse_mode: 'HTML',
+        disable_web_page_preview: false,
+      }),
+    });
+    const fbData = await fbResp.json().catch(() => ({}));
+    if (!fbResp.ok || !fbData.ok) {
+      return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || fbData.description || tgResp.status }, 502, origin);
+    }
+    return _jsonResp({ ok: true, mode: 'video_fallback', message_id: fbData.result?.message_id }, 200, origin);
+  }
+
+  // ── DEFAULT (chat / non-video) ──
   const headerLine = safeDesc ? `<b>${safeShot}</b> — ${safeDesc}` : `<b>${safeShot}</b>`;
   const kindLine = safeKind ? `\n📦 Pushed: ${safeKind}` : '';
   const fromLine = `\n👤 By: ${safeFrom}`;
   const bodyLine = safeText ? `\n\n💬 «${safeText}»` : '';
   const commentLine = safeComment ? `\n\n📝 ${safeComment}` : '';
-  const linkLine = safeLink ? `\n\n<a href="${safeLink}">Open in tracker</a>` : '';
   const msg = `🔔 ${headerLine}${kindLine}${fromLine}${bodyLine}${commentLine}${linkLine}`;
-
-  // Send to Telegram
   const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
   const tgResp = await fetch(tgUrl, {
     method: 'POST',
