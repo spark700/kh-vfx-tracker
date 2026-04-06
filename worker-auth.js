@@ -303,9 +303,22 @@ async function handleTgPing(request, env) {
       if (!isNaN(v) && v > 0) effectiveThreads[k] = v;
     }
   } catch (e) {}
-  // Discover topic names AND Telegram users from recent updates (24h window).
+  // Discover topic names AND Telegram users AND chats from recent updates.
   const topicNames = {};
   const tgUsersMap = {}; // user_id → { id, username, first_name, last_name }
+  const tgChatsMap = {}; // chat_id → { id, type, title, is_forum, username }
+  function _captureChat(c) {
+    if (!c || !c.id) return;
+    if (tgChatsMap[c.id]) return;
+    tgChatsMap[c.id] = {
+      id: c.id,
+      type: c.type || null,
+      title: c.title || null,
+      is_forum: !!c.is_forum,
+      username: c.username || null,
+      first_name: c.first_name || null,
+    };
+  }
   function _captureUser(u) {
     if (!u || !u.id) return;
     if (tgUsersMap[u.id]) return;
@@ -325,8 +338,13 @@ async function handleTgPing(request, env) {
       const j = await r.json();
       if (j && j.ok && Array.isArray(j.result)) {
         for (const u of j.result) {
-          const m = u.message || u.edited_message || u.channel_post;
+          // Bot membership change events expose chat info too
+          if (u.my_chat_member && u.my_chat_member.chat) _captureChat(u.my_chat_member.chat);
+          if (u.chat_member && u.chat_member.chat) _captureChat(u.chat_member.chat);
+          const m = u.message || u.edited_message || u.channel_post || u.edited_channel_post;
           if (!m) continue;
+          // Capture the chat the message came from
+          _captureChat(m.chat);
           // Topic name discovery
           if (m.forum_topic_created && m.message_thread_id) {
             topicNames[m.message_thread_id] = m.forum_topic_created.name;
@@ -345,6 +363,12 @@ async function handleTgPing(request, env) {
           }
         }
       }
+      // Always include the configured push chat as a known one
+      try {
+        const ccr = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${encodeURIComponent(TG_CHAT_ID)}`);
+        const ccj = await ccr.json();
+        if (ccj && ccj.ok && ccj.result) _captureChat(ccj.result);
+      } catch (e) {}
     } catch (e) {}
     // Also pull group administrators — these are not always covered by
     // recent activity in getUpdates.
@@ -389,6 +413,7 @@ async function handleTgPing(request, env) {
     hardcodedThreads: ARTIST_THREADS,
     topicNames,
     tgUsers,
+    tgChats: Object.values(tgChatsMap),
   }, 200, origin);
 }
 

@@ -894,7 +894,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0029</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0030</div>
 
 <script>
 const USERS = {
@@ -2092,6 +2092,20 @@ function _renderBotSettings(){
     html+=`<tr><td>${esc(a.display)}<div class="bot-artist-id">${esc(a.id)}${fallbackHint}</div></td><td><select class="bot-topic-select" data-artist="${esc(a.id)}">${optsHtml}</select> ${tidLabel}</td><td><select class="bot-tguser-select" data-artist="${esc(a.id)}">${tgOpts}</select></td><td><button class="bot-test-btn" onclick="_testBotPush('${esc(a.id)}')">Test</button></td></tr>`;
   });
   html+=`</tbody></table><div style="margin-top:8px;text-align:right"><button class="bot-test-btn" onclick="_refreshBotStatus()">↻ Refresh</button></div></div>`;
+  // ── BOT CHATS / CHANNELS ──
+  const botChats=_botPingData&&_botPingData!=='error'?(_botPingData.tgChats||[]):[];
+  if(botChats.length){
+    const activeChatId=_botPingData?.chatId||'';
+    html+=`<div class="bot-section"><div class="bot-section-title">Bot is in</div><div class="bot-section-hint">Discovered from recent activity. Read-only — to switch the active push chat I need to redeploy the worker.</div><div class="bot-discovered-list">`;
+    botChats.forEach(c=>{
+      const isActive=String(c.id)===String(activeChatId);
+      const typeLabel=c.is_forum?'forum':(c.type||'');
+      const tagColor=isActive?'#3fb950':'#484f58';
+      const activeBadge=isActive?` <span style="color:#3fb950;font-size:9px;text-transform:uppercase;font-weight:600;margin-left:6px">● active</span>`:'';
+      html+=`<div class="bot-discovered-item"><span class="m-name">${esc(c.title||c.first_name||'(no title)')}${activeBadge}</span><span style="font-size:10px;color:${tagColor};text-transform:uppercase">${esc(typeLabel)}</span><span class="m-at">${esc(String(c.id))}</span></div>`;
+    });
+    html+=`</div></div>`;
+  }
   // ── DISCOVERED TELEGRAM USERS ──
   const discovered=_botPingData&&_botPingData!=='error'?(_botPingData.tgUsers||[]):[];
   if(discovered.length){
