@@ -99,8 +99,8 @@ async function handleTgPush(request, env) {
   try { body = await request.json(); } catch (e) {
     return _jsonResp({ ok: false, error: 'bad_json' }, 400, origin);
   }
-  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, thumbUrl, versionNumber } = body || {};
-  if (!shotId || !artistId || !userId || !linkToken) {
+  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, thumbUrl, versionNumber, targetChatId } = body || {};
+  if (!shotId || !userId || !linkToken) {
     return _jsonResp({ ok: false, error: 'missing_fields' }, 400, origin);
   }
 
@@ -111,16 +111,40 @@ async function handleTgPush(request, env) {
     return _jsonResp({ ok: false, error: 'auth_failed' }, 401, origin);
   }
 
-  // Permission: admin OR the artist assigned to the shot must match the caller
+  // Permission rules:
+  //  • Pushing to the default group: admin OR the artist assigned to the shot
+  //  • Pushing to any other (client) chat: admin only
   const callerIsAdmin = user.role === 'admin';
-  const callerIsAssignee = user.id === String(artistId).toLowerCase();
-  if (!callerIsAdmin && !callerIsAssignee) {
+  const callerIsAssignee = artistId && user.id === String(artistId).toLowerCase();
+  const usingTargetChat = targetChatId && String(targetChatId) !== String(TG_CHAT_ID);
+  if (usingTargetChat) {
+    if (!callerIsAdmin) {
+      return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
+    }
+    // Verify this chat is whitelisted as a client chat in the shared state
+    const allowed = ((stateData && stateData.__bot && stateData.__bot.clientChats) || []).map(String);
+    if (!allowed.includes(String(targetChatId))) {
+      return _jsonResp({ ok: false, error: 'chat_not_allowed' }, 403, origin);
+    }
+  } else if (!callerIsAdmin && !callerIsAssignee) {
     return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
   }
 
-  const threadId = _resolveThread(stateData, artistId);
-  if (!threadId) {
-    return _jsonResp({ ok: false, error: 'artist_no_topic' }, 400, origin);
+  // Resolve the chat & thread to send to
+  const effectiveChatId = usingTargetChat ? String(targetChatId) : TG_CHAT_ID;
+  let threadId = null;
+  if (!usingTargetChat) {
+    // Default group is a forum — every push must go into the artist's topic
+    threadId = _resolveThread(stateData, artistId);
+    if (!threadId) {
+      return _jsonResp({ ok: false, error: 'artist_no_topic' }, 400, origin);
+    }
+  }
+  // Helper to build the body for sendMessage / sendPhoto with the right chat
+  function _withChat(obj) {
+    obj.chat_id = effectiveChatId;
+    if (threadId) obj.message_thread_id = threadId;
+    return obj;
   }
 
   // Special: test push (kind === 'test') — only admin, only sends a tiny check message
@@ -130,13 +154,11 @@ async function handleTgPush(request, env) {
     const tgResp = await fetch(tgUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        message_thread_id: threadId,
+      body: JSON.stringify(_withChat({
         text: `🧪 Test message from <b>${_escapeHtml(fromUser || 'admin')}</b>\n<i>Bot Settings → Test Push</i>`,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
-      }),
+      })),
     });
     const tgData = await tgResp.json().catch(() => ({}));
     if (!tgResp.ok || !tgData.ok) {
@@ -169,14 +191,12 @@ async function handleTgPush(request, env) {
     const tgResp = await fetch(tgUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        message_thread_id: threadId,
+      body: JSON.stringify(_withChat({
         photo: thumbUrl,
         caption,
         parse_mode: 'HTML',
         reply_markup,
-      }),
+      })),
     });
     const tgData = await tgResp.json().catch(() => ({}));
     if (tgResp.ok && tgData.ok) {
@@ -186,14 +206,12 @@ async function handleTgPush(request, env) {
     const fbResp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        message_thread_id: threadId,
+      body: JSON.stringify(_withChat({
         text: caption,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
         reply_markup,
-      }),
+      })),
     });
     const fbData = await fbResp.json().catch(() => ({}));
     if (!fbResp.ok || !fbData.ok) {
@@ -217,14 +235,12 @@ async function handleTgPush(request, env) {
   const tgResp = await fetch(tgUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: TG_CHAT_ID,
-      message_thread_id: threadId,
+    body: JSON.stringify(_withChat({
       text: msg,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
       reply_markup,
-    }),
+    })),
   });
   const tgData = await tgResp.json().catch(() => ({}));
   if (!tgResp.ok || !tgData.ok) {

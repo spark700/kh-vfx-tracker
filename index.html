@@ -100,6 +100,9 @@
   .bot-discovered-item:last-child { border-bottom: none; }
   .bot-discovered-item .m-name { color: #c9d1d9; flex: 1; }
   .bot-discovered-item .m-at { color: #58a6ff; font-family: 'SF Mono', monospace; font-size: 11px; }
+  .bot-chat-client-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.3px; cursor: pointer; padding: 3px 8px; border: 1px solid #30363d; border-radius: 4px; transition: 0.15s; }
+  .bot-chat-client-toggle:hover { border-color: #d29922; color: #d29922; }
+  .bot-chat-client-toggle input { accent-color: #d29922; cursor: pointer; }
   .u-btn { display: inline-flex; align-items: center; gap: 5px; background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: .15s; font-family: inherit; }
   .u-btn:hover { border-color: #58a6ff; color: #c9d1d9; }
   .u-btn code { font-family: 'SF Mono', monospace; font-size: 11px; color: #c9d1d9; }
@@ -571,6 +574,8 @@
   .note-push-btn:hover:not(:disabled), .player-push-btn:hover:not(:disabled) { background: #d2992233; }
   .note-push-btn:disabled, .player-push-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: #484f58; color: #484f58; }
   .note-push-btn.hidden, .player-push-btn.hidden { display: none !important; }
+  .player-push-client-btn { border-color: #3fb950; color: #3fb950; }
+  .player-push-client-btn:hover:not(:disabled) { background: #3fb95022; }
   .chat-msg-pushed-mark { font-size: 10px; color: #d29922; margin-left: 6px; opacity: 0.8; }
   .pv-pushed-mark { font-size: 9px; color: #d29922; margin-left: 4px; }
   .note-panel-close { background: none; border: none; color: #484f58; font-size: 24px; cursor: pointer; padding: 4px 8px; border-radius: 4px; line-height: 1; }
@@ -763,6 +768,7 @@
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;align-self:flex-start">
       <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff"></div>
       <button class="player-push-btn hidden" id="playerPushBtn" onclick="pushPlayerNotification()" title="Push current version to Telegram">&#128276; <span id="playerPushLabel">Push</span></button>
+      <button class="player-push-btn player-push-client-btn hidden" id="playerPushClientBtn" onclick="pushPlayerToClient()" title="Push current version to a client chat">📤 <span id="playerPushClientLabel">Push to client</span></button>
     </div>
     <div class="player-with-notes">
       <div class="player-video-col">
@@ -894,7 +900,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0030</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0031</div>
 
 <script>
 const USERS = {
@@ -937,6 +943,10 @@ async function _prefetchTgBotInfo(){
       // Replace cache entirely — worker is the source of truth and already
       // filters out users who left/were kicked from the group.
       state.__bot.tgUsers=d.tgUsers;
+    }
+    if(Array.isArray(d.tgChats)){
+      // Cache known chats so the client-push picker has friendly titles
+      state.__bot.knownChats=d.tgChats;
     }
     if(d.topicNames){
       if(!state.__bot.topicNames)state.__bot.topicNames={};
@@ -2096,13 +2106,18 @@ function _renderBotSettings(){
   const botChats=_botPingData&&_botPingData!=='error'?(_botPingData.tgChats||[]):[];
   if(botChats.length){
     const activeChatId=_botPingData?.chatId||'';
-    html+=`<div class="bot-section"><div class="bot-section-title">Bot is in</div><div class="bot-section-hint">Discovered from recent activity. Read-only — to switch the active push chat I need to redeploy the worker.</div><div class="bot-discovered-list">`;
+    const clientChats=new Set((cfg.clientChats||[]).map(String));
+    html+=`<div class="bot-section"><div class="bot-section-title">Bot is in</div><div class="bot-section-hint">Mark a chat as <b>client</b> to enable the admin's "Push to client" button in the player.</div><div class="bot-discovered-list">`;
     botChats.forEach(c=>{
-      const isActive=String(c.id)===String(activeChatId);
+      const cid=String(c.id);
+      const isActive=cid===String(activeChatId);
+      const isClient=clientChats.has(cid);
       const typeLabel=c.is_forum?'forum':(c.type||'');
       const tagColor=isActive?'#3fb950':'#484f58';
       const activeBadge=isActive?` <span style="color:#3fb950;font-size:9px;text-transform:uppercase;font-weight:600;margin-left:6px">● active</span>`:'';
-      html+=`<div class="bot-discovered-item"><span class="m-name">${esc(c.title||c.first_name||'(no title)')}${activeBadge}</span><span style="font-size:10px;color:${tagColor};text-transform:uppercase">${esc(typeLabel)}</span><span class="m-at">${esc(String(c.id))}</span></div>`;
+      const clientBadge=isClient?` <span style="color:#d29922;font-size:9px;text-transform:uppercase;font-weight:600;margin-left:6px">★ client</span>`:'';
+      const checkbox=isActive?'':`<label class="bot-chat-client-toggle" title="Mark as client chat"><input type="checkbox" class="bot-client-cb" data-chat="${esc(cid)}" ${isClient?'checked':''}> client</label>`;
+      html+=`<div class="bot-discovered-item"><span class="m-name">${esc(c.title||c.first_name||'(no title)')}${activeBadge}${clientBadge}</span><span style="font-size:10px;color:${tagColor};text-transform:uppercase">${esc(typeLabel)}</span>${checkbox}<span class="m-at">${esc(cid)}</span></div>`;
     });
     html+=`</div></div>`;
   }
@@ -2141,12 +2156,10 @@ async function _refreshBotStatus(){
     const d=await r.json();
     if(!d.ok)throw new Error(d.error||'unknown');
     _botPingData=d;
-    // Replace cached Telegram users in state — worker filters out left/kicked
-    if(Array.isArray(d.tgUsers)){
-      const cfg=_getBotConfig();
-      cfg.tgUsers=d.tgUsers;
-      saveState(state);
-    }
+    const cfg=_getBotConfig();
+    if(Array.isArray(d.tgUsers))cfg.tgUsers=d.tgUsers;
+    if(Array.isArray(d.tgChats))cfg.knownChats=d.tgChats;
+    saveState(state);
   }catch(e){
     _botPingData='error';
   }
@@ -2161,6 +2174,12 @@ function _saveBotSettings(){
     if(!isNaN(v)&&v>0)cfg.artistThreads[aid]=v;
     else delete cfg.artistThreads[aid];
   });
+  // Client chats (checkboxes in "Bot is in" section)
+  const clientChats=[];
+  document.querySelectorAll('.bot-client-cb').forEach(cb=>{
+    if(cb.checked)clientChats.push(cb.dataset.chat);
+  });
+  cfg.clientChats=clientChats;
   // Telegram usernames per artist (saved on the user object)
   document.querySelectorAll('.bot-tguser-select').forEach(sel=>{
     const aid=sel.dataset.artist;
@@ -3719,6 +3738,18 @@ function _updatePlayerPushBtn(){
   // version. The 1s _tgAdminDebounce in the handler protects from
   // accidental double clicks.
   btn.disabled=false;btn.title=`Push current version to ${assignee}`;
+  // Client push button — admin only, only when at least one client chat is configured
+  const cBtn=document.getElementById("playerPushClientBtn");
+  if(cBtn){
+    const clientChats=state.__bot?.clientChats||[];
+    if(isAdmin()&&clientChats.length>0){
+      cBtn.classList.remove('hidden');
+      cBtn.disabled=false;
+      cBtn.title=`Push current version to client chat`;
+    } else {
+      cBtn.classList.add('hidden');
+    }
+  }
 }
 async function pushPlayerNotification(){
   if(!_gifCurrentId)return;
@@ -3777,6 +3808,92 @@ async function pushPlayerNotification(){
     console.error("Player push failed:",e);
     alert("Push failed: "+(e.message||e));
     _updatePlayerPushBtn();
+  }
+}
+
+// Picker that lists all chats marked as "client" in Bot Settings.
+// Resolves with the chosen chat id or null on cancel.
+function _pickClientChat(){
+  return new Promise((resolve)=>{
+    const ids=(state.__bot?.clientChats||[]).map(String);
+    const chats=(state.__bot?.knownChats||[]).filter(c=>ids.includes(String(c.id)));
+    // Fallback: if we don't have titles cached, just show ids
+    const choices=ids.map(id=>{
+      const c=chats.find(x=>String(x.id)===id);
+      return {id,title:c?.title||c?.first_name||('Chat '+id)};
+    });
+    if(choices.length===0){resolve(null);return;}
+    if(choices.length===1){resolve(choices[0].id);return;}
+    const ov=document.createElement("div");
+    ov.className="confirm-overlay";
+    const opts=choices.map(c=>`<button class="bot-cancel-btn" data-id="${esc(c.id)}" style="width:100%;margin-bottom:6px;text-align:left">${esc(c.title)} <span style="color:#484f58;font-size:10px;font-family:'SF Mono',monospace">${esc(c.id)}</span></button>`).join('');
+    ov.innerHTML=`<div class="confirm-box" style="min-width:380px"><div class="confirm-title">Push to which client chat?</div><div class="confirm-msg">${opts}</div><div class="confirm-btns"><button class="confirm-btn cancel" id="pccCancel">Cancel</button></div></div>`;
+    document.body.appendChild(ov);
+    const cleanup=()=>ov.remove();
+    ov.querySelectorAll('button[data-id]').forEach(b=>{
+      b.onclick=()=>{const id=b.dataset.id;cleanup();resolve(id);};
+    });
+    ov.querySelector('#pccCancel').onclick=()=>{cleanup();resolve(null);};
+    ov.addEventListener("click",(e)=>{if(e.target===ov){cleanup();resolve(null);}});
+  });
+}
+
+async function pushPlayerToClient(){
+  if(!_gifCurrentId)return;
+  if(!isAdmin()){alert("Admin only");return;}
+  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+    alert("Your account has no link token. Ask admin to regenerate.");return;
+  }
+  if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
+  const targetChatId=await _pickClientChat();
+  if(!targetChatId)return;
+  const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
+  const versionNumber=_gifVersionIdx<0?'Source':(_extractVersionNumber(versionLabel)||('v'+(_gifVersionIdx+1)));
+  let thumbUrl;
+  if(_gifVersionIdx<0){
+    thumbUrl=CDN_BASE+"/thumbs/"+_gifCurrentId+".jpg";
+  } else {
+    const v=(state[_gifCurrentId]?.versions||[])[_gifVersionIdx];
+    thumbUrl=v?.thumb||(CDN_BASE+"/thumbs/"+_gifCurrentId+".jpg");
+  }
+  const subject=`${_gifCurrentId} ${versionNumber}\n${versionLabel}\n\n→ Sending to CLIENT chat`;
+  const comment=await _showPushPrompt("Push to client",subject);
+  if(comment===null)return;
+  const desc=getDesc(_gifCurrentId,(TASKS.find(t=>t.id===_gifCurrentId)?.desc)||"");
+  const fromUser=currentUser.display||currentUser.id;
+  const link=`https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
+  const cBtn=document.getElementById("playerPushClientBtn");
+  const cLbl=document.getElementById("playerPushClientLabel");
+  if(cBtn)cBtn.disabled=true;
+  if(cLbl)cLbl.textContent='Sending…';
+  try{
+    const r=await fetch(TG_PUSH_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        shotId:_gifCurrentId,shotDesc:desc,artistId:'',
+        kind:"video",versionNumber,thumbUrl,
+        comment,fromUser,link,targetChatId,
+        userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
+      })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.ok)throw new Error(data.error||('HTTP '+r.status));
+    _lastPushAt=Date.now();
+    // Mark in state under separate key
+    if(!state[_gifCurrentId])state[_gifCurrentId]={};
+    if(!state[_gifCurrentId].clientPushed)state[_gifCurrentId].clientPushed={};
+    state[_gifCurrentId].clientPushed[_versionKey(_gifVersionIdx)]={by:currentUser.id,at:Date.now(),chat:targetChatId};
+    const sysText=`Pushed video (${versionNumber}) to CLIENT chat by ${fromUser}${comment?` — "${comment}"`:""}`;
+    _appendSystemChatMsg(_gifCurrentId,sysText);
+    saveState(state);
+    if(cLbl)cLbl.textContent='Sent ✓';
+    setTimeout(()=>{if(cLbl)cLbl.textContent='Push to client';if(cBtn)cBtn.disabled=false;},1500);
+  }catch(e){
+    console.error("Client push failed:",e);
+    alert("Client push failed: "+(e.message||e));
+    if(cLbl)cLbl.textContent='Push to client';
+    if(cBtn)cBtn.disabled=false;
   }
 }
 
