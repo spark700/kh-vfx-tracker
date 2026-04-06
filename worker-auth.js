@@ -309,10 +309,12 @@ async function handleTgPing(request, env) {
       if (j && j.ok) botInfo = { id: j.result.id, username: j.result.username, first_name: j.result.first_name };
     } catch (e) {}
   }
+  // Pull shared state once and reuse it for thread / client-chat lookups
+  let stateData = null;
+  try { stateData = await _fetchState(); } catch (e) {}
   // Pull effective threads (state override merged on top of hardcoded)
   let effectiveThreads = { ...ARTIST_THREADS };
   try {
-    const stateData = await _fetchState();
     const override = stateData?.__bot?.artistThreads || {};
     for (const k of Object.keys(override)) {
       const v = parseInt(override[k], 10);
@@ -337,6 +339,7 @@ async function handleTgPing(request, env) {
   }
   function _captureUser(u) {
     if (!u || !u.id) return;
+    if (u.is_bot) return; // never include bots in mention candidates
     if (tgUsersMap[u.id]) return;
     tgUsersMap[u.id] = {
       id: u.id,
@@ -386,39 +389,57 @@ async function handleTgPing(request, env) {
         if (ccj && ccj.ok && ccj.result) _captureChat(ccj.result);
       } catch (e) {}
     } catch (e) {}
-    // Also pull group administrators — these are not always covered by
-    // recent activity in getUpdates.
-    try {
-      const ar = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChatAdministrators?chat_id=${encodeURIComponent(TG_CHAT_ID)}`);
-      const aj = await ar.json();
-      if (aj && aj.ok && Array.isArray(aj.result)) {
-        for (const m of aj.result) {
-          if (m && m.user && !m.user.is_bot) _captureUser(m.user);
-        }
-      }
-    } catch (e) {}
   }
-  // Filter out users who are no longer in the group (left / kicked).
-  // Telegram remembers them in our cache forever otherwise.
-  const allCaptured = Object.values(tgUsersMap);
-  const tgUsers = [];
-  await Promise.all(allCaptured.map(async (u) => {
-    try {
-      const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(TG_CHAT_ID)}&user_id=${u.id}`);
-      const j = await r.json();
-      if (j && j.ok && j.result && j.result.status) {
-        const st = j.result.status;
-        if (st === 'left' || st === 'kicked') return; // exclude
-        u.status = st;
-        tgUsers.push(u);
-      } else {
-        // Couldn't determine status — keep it just in case
-        tgUsers.push(u);
+  // Build the full list of chats whose members are interesting:
+  //   • the default forum group (TG_CHAT_ID)
+  //   • every chat marked as a client in state.__bot.clientChats
+  const checkChatIds = [String(TG_CHAT_ID)];
+  const clientChatsList = (stateData && stateData.__bot && stateData.__bot.clientChats) || [];
+  for (const c of clientChatsList) {
+    const id = String(c);
+    if (!checkChatIds.includes(id)) checkChatIds.push(id);
+  }
+  // Pull group administrators for every interesting chat (not just default).
+  if (hasToken) {
+    await Promise.all(checkChatIds.map(async (cid) => {
+      try {
+        const ar = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChatAdministrators?chat_id=${encodeURIComponent(cid)}`);
+        const aj = await ar.json();
+        if (aj && aj.ok && Array.isArray(aj.result)) {
+          for (const m of aj.result) {
+            if (m && m.user && !m.user.is_bot) _captureUser(m.user);
+          }
+        }
+      } catch (e) {}
+    }));
+  }
+  // Filter captured users — keep those active in at least one interesting chat
+  let tgUsers = [];
+  if (hasToken) {
+    const allCaptured = Object.values(tgUsersMap);
+    const filtered = [];
+    await Promise.all(allCaptured.map(async (u) => {
+      const memberships = await Promise.all(checkChatIds.map(async (cid) => {
+        try {
+          const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(cid)}&user_id=${u.id}`);
+          const j = await r.json();
+          if (j && j.ok && j.result && j.result.status) {
+            const st = j.result.status;
+            if (st === 'left' || st === 'kicked') return null;
+            return { chat: cid, status: st };
+          }
+        } catch (e) {}
+        return null;
+      }));
+      const active = memberships.filter(Boolean);
+      if (active.length) {
+        u.chats = active;
+        u.status = active[0].status;
+        filtered.push(u);
       }
-    } catch (e) {
-      tgUsers.push(u);
-    }
-  }));
+    }));
+    tgUsers = filtered;
+  }
   return _jsonResp({
     ok: true,
     workerAlive: true,
