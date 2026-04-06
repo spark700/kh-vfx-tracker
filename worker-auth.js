@@ -121,54 +121,50 @@ async function handleTgPush(request, env) {
   const safeLink = String(link || '').replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
   const linkLine = safeLink ? `\n\n<a href="${safeLink}">Open in tracker</a>` : '';
 
-  // ── VIDEO PUSH: send a sendMessage that points to /p — Telegram will pull
-  // OG meta and render a clickable preview card with the version thumbnail.
+  // ── VIDEO PUSH: sendPhoto with the version thumbnail and an inline-keyboard
+  // "Open in player" button. Inline-keyboard URL buttons open in Telegram's
+  // browser directly without the "Open this link?" interstitial.
   if (kind === 'video' && thumbUrl && /^https?:\/\//.test(thumbUrl)) {
     const videoHeader = safeVersion ? `<b>${safeShot}</b> ${safeVersion}` : `<b>${safeShot}</b>`;
-    // Build /p preview URL — Telegram bot will fetch this and use OG tags
-    const titleStr = `${shotId} ${versionNumber || ''}`.trim();
-    const descStr = shotDesc || '';
-    const previewUrl = (() => {
-      // Player param contains shot id; v contains version idx
-      const u = new URL('https://killhouse-vfx.contora.workers.dev/p');
-      u.searchParams.set('player', shotId);
-      // versionNumber has form 'v003' or 'Source'; the client also has the int idx in `link`
-      // Extract v= from the original tracker link if present
-      let vIdx = '-1';
-      try {
-        const m = String(link || '').match(/[?&]v=(-?\d+)/);
-        if (m) vIdx = m[1];
-      } catch (e) {}
-      u.searchParams.set('v', vIdx);
-      u.searchParams.set('thumb', thumbUrl);
-      u.searchParams.set('title', titleStr);
-      if (descStr) u.searchParams.set('desc', descStr.slice(0, 120));
-      // Cache-buster: forces Telegram to fetch fresh OG meta for each push
-      u.searchParams.set('t', String(Date.now()));
-      return u.toString();
-    })();
-    const safePreview = previewUrl.replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
-    // Plain text body, no <a href>. The preview card itself is the clickable
-    // entry point — opens the URL directly without Telegram's "Open link?"
-    // confirmation dialog (the dialog only appears for anchor text ≠ href).
-    const text = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}`;
-    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const caption = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}`;
+    // Direct GitHub Pages link (no redirect) — minimises confirmation prompts.
+    const directLink = safeLink || `https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(shotId)}`;
+    const reply_markup = { inline_keyboard: [[{ text: '▶ Open in player', url: directLink }]] };
+    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
     const tgResp = await fetch(tgUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: TG_CHAT_ID,
         message_thread_id: threadId,
-        text,
+        photo: thumbUrl,
+        caption,
         parse_mode: 'HTML',
-        link_preview_options: { is_disabled: false, url: safePreview, prefer_large_media: true, show_above_text: true },
+        reply_markup,
       }),
     });
     const tgData = await tgResp.json().catch(() => ({}));
     if (tgResp.ok && tgData.ok) {
-      return _jsonResp({ ok: true, mode: 'link_preview', message_id: tgData.result?.message_id }, 200, origin);
+      return _jsonResp({ ok: true, mode: 'photo+button', message_id: tgData.result?.message_id }, 200, origin);
     }
-    return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || tgResp.status }, 502, origin);
+    // Fallback: text-only sendMessage with the same button
+    const fbResp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TG_CHAT_ID,
+        message_thread_id: threadId,
+        text: caption,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup,
+      }),
+    });
+    const fbData = await fbResp.json().catch(() => ({}));
+    if (!fbResp.ok || !fbData.ok) {
+      return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || fbData.description || tgResp.status }, 502, origin);
+    }
+    return _jsonResp({ ok: true, mode: 'text+button', message_id: fbData.result?.message_id }, 200, origin);
   }
 
   // ── DEFAULT (chat / non-video) ──
