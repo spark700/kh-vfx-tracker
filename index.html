@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0074</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0075</div>
 
 <script>
 const USERS = {
@@ -3984,9 +3984,9 @@ function updateStats(){
       const reviewBadge=s.review>0?`<div style="position:absolute;left:50%;bottom:0;transform:translate(-50%,calc(100% - 1px));background:#161b22;color:#58a6ff;border:1px solid #30363d;border-top-color:#161b22;border-radius:0 0 8px 8px;padding:2px 9px 1px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">◉ ${s.review}</div>`:'';
       html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'}" title="${active} active · ${s.done} done · ${s.review} review · ${s.total} total">
         ${doneBadge}
-        <div style="font-size:18px;font-weight:700;color:${col}">${active}</div>
-        <div style="font-size:10px;color:#8b949e;margin:2px 0">${esc(a.display)}</div>
-        <div style="font-size:9px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="color:#a13730">${s.todo}○</span><span style="color:#896318">${s.progress}◐</span></div>
+        <div style="font-size:11px;color:#8b949e;font-weight:600;margin-bottom:2px">${esc(a.display)}</div>
+        <div style="font-size:18px;font-weight:700;color:${col};line-height:1.1">${active}</div>
+        <div style="font-size:9px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px"><span style="color:#a13730">${s.todo}○</span><span style="color:#896318">${s.progress}◐</span></div>
         ${reviewBadge}
       </div>`;
     });
