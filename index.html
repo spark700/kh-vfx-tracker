@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0063</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0064</div>
 
 <script>
 const USERS = {
@@ -1127,7 +1127,7 @@ async function tryLogin(){
 }
 function guestLogin(){currentUser={id:"guest",display:"Guest",role:"guest"};_persistUser("guest");showLoggedIn();}
 document.getElementById("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
-async function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
+async function showLoggedIn(){try{localStorage.setItem('__dbg_showLoggedIn',JSON.stringify({at:Date.now(),user:currentUser?.id,badge:document.getElementById('userBadge')?.style.display,stack:new Error().stack?.substring(0,400)}));}catch(e){}document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
   // Pull latest data from remote
   const pulled=await _pullRemote();if(pulled){runMigrations();if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}}
   document.querySelector("table").classList.toggle("hide-admin",!isAdmin());
