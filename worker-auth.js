@@ -53,6 +53,31 @@ function _escapeHtml(s) {
     .replace(/>/g, '&gt;');
 }
 
+function _formatBytes(b) {
+  if (!b) return '';
+  if (b < 1024 * 1024) return Math.round(b / 1024) + ' KB';
+  if (b < 1024 * 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  return (b / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+// Build the human-friendly per-shot summary used by both the deep-link
+// reply and the original client-chat push. One line per shot:
+//   <b>SHOT_FINAL</b> <i>N files · size</i>
+// No filenames (Telegram auto-linkifies anything that looks like a path).
+function _buildShotSummaryLines(stateData, ids) {
+  const lines = [];
+  for (const sid of ids || []) {
+    const arr = (stateData[sid] && stateData[sid].files && stateData[sid].files['versions/final']) || [];
+    let bytes = 0;
+    for (const f of arr) bytes += (f.size || 0);
+    const count = arr.length;
+    const sizeStr = _formatBytes(bytes);
+    const meta = `${count} file${count !== 1 ? 's' : ''}${sizeStr ? ' · ' + sizeStr : ''}`;
+    lines.push(`<b>${_escapeHtml(String(sid).toUpperCase())}_FINAL</b>  <i>${_escapeHtml(meta)}</i>`);
+  }
+  return lines;
+}
+
 // Pulls the shared tracker_state once. Returned object can be used by both
 // _verifyUser and the artist→thread lookup so we don't double-fetch.
 async function _fetchState() {
@@ -266,13 +291,16 @@ async function handleTgPush(request, env) {
       _ensureTrackingNode(stateData, dlToken);
       await _writeStateData(stateData);
     }
-    const list = Array.isArray(files) ? files : [];
-    const lines = list.slice(0, 50).map(f => '• ' + _escapeHtml(String(f)));
-    const more = list.length > 50 ? '\n…+' + (list.length - 50) + ' more' : '';
+    // Build per-shot summary lines straight from state for THIS share
+    // token, regardless of what the client sent in `files`. Listing
+    // individual filenames triggers Telegram auto-link, so we omit them
+    // and only show <b>SHOT_FINAL</b> <i>N files · size</i> per shot.
+    const share = (stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
+    const shareIds = (share && share.ids) || [];
+    const summaryLines = _buildShotSummaryLines(stateData, shareIds);
     const safeComment = _escapeHtml((comment || '').slice(0, 500));
     const text =
-      (lines.length ? lines.join('\n') : '<i>(no files)</i>') +
-      more +
+      (summaryLines.length ? summaryLines.join('\n') : '<i>(no shots)</i>') +
       (safeComment ? '\n\n📝 ' + safeComment : '');
     const reply_markup = { inline_keyboard: [[{ text: '⬇ Download', url: buttonUrl }]] };
     const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -481,36 +509,16 @@ async function _processTelegramUpdate(env, stateData, update, ctx) {
           if (!node.users[uid].visited_at) node.users[uid].visited_at = Date.now();
         }
         dirty = true;
-        // Reply with file list + Open download page button
+        // Reply with per-shot summary + Open download page button.
+        // Per-shot only — listing individual filenames triggers Telegram's
+        // automatic URL linkification on anything that looks like a path.
         try {
           const targetUrl = `https://spark700.github.io/kh-vfx-tracker/?download=${encodeURIComponent(dlToken)}&u=${encodeURIComponent(uid)}`;
           const share = (stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
           const ids = (share && share.ids) || [];
-          const fileLines = [];
-          let totalBytes = 0, totalFiles = 0;
-          for (const sid of ids) {
-            const arr = (stateData[sid] && stateData[sid].files && stateData[sid].files['versions/final']) || [];
-            for (const f of arr) {
-              fileLines.push('• ' + _escapeHtml(sid + '_FINAL/' + (f.name || '')));
-              totalBytes += (f.size || 0);
-              totalFiles += 1;
-            }
-          }
-          const sizeStr = totalBytes
-            ? (totalBytes < 1024 * 1024
-              ? Math.round(totalBytes / 1024) + ' KB'
-              : totalBytes < 1024 * 1024 * 1024
-                ? (totalBytes / (1024 * 1024)).toFixed(1) + ' MB'
-                : (totalBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB')
-            : '';
+          const lines = _buildShotSummaryLines(stateData, ids);
           const header = `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!`;
-          const summary = totalFiles
-            ? `\n\n<b>${totalFiles} file${totalFiles !== 1 ? 's' : ''}${sizeStr ? ' · ' + sizeStr : ''}</b>`
-            : '';
-          const list = fileLines.length
-            ? '\n\n' + fileLines.slice(0, 40).join('\n') + (fileLines.length > 40 ? `\n…+${fileLines.length - 40} more` : '')
-            : '';
-          const replyText = header + summary + list;
+          const replyText = header + (lines.length ? '\n\n' + lines.join('\n') : '');
           await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
