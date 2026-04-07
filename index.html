@@ -173,9 +173,13 @@
     100% { box-shadow: 0 0 0 0 currentColor; background-color: #161b22; }
   }
   .tab-pulse { animation: tabPulse 0.55s ease-out; }
-  /* Row sheen — a wide translucent stripe sweeps across every row
-     in lock-step (no per-row delay). Stripe travels right → left
-     so it visually meets the artist filter buttons on the right. */
+  /* Row sheen — a wide translucent stripe sweeps right → left across
+     every visible row. animation-fill-mode: both means the 0% keyframe
+     applies during animation-delay (stripe parked off to the right) and
+     the 100% keyframe sticks after it ends (parked off to the left).
+     No static background-position rule so the browser never has a
+     value to "snap back" to mid-animation — that snap was the source
+     of the brief reverse-direction flicker on staggered rows. */
   @keyframes rowSheen {
     0%   { background-position: 200% 0; }
     100% { background-position: -100% 0; }
@@ -184,8 +188,7 @@
     background-image: linear-gradient(100deg, transparent 10%, var(--rf, rgba(88,166,255,0.55)) 50%, transparent 90%);
     background-size: 180% 100%;
     background-repeat: no-repeat;
-    background-position: 200% 0;
-    animation: rowSheen 0.7s ease-out;
+    animation: rowSheen 0.7s ease-out both;
   }
   .separator { color: #30363d; font-size: 18px; user-select: none; }
   table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; }
@@ -984,7 +987,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0086</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0087</div>
 
 <script>
 const USERS = {
