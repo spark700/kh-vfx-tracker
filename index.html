@@ -909,8 +909,10 @@
     <span class="logout-link" onclick="logout()">logout</span>
   </div>
   <button class="admin-gear" id="adminGear" onclick="toggleAdminMenu()" style="display:none" title="Admin menu">⚙</button>
-  <button id="doneShotsBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto;margin-right:8px" onclick="openDoneShots()">✅ Done Shots</button>
-  <button id="myFilesBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600" onclick="openMyFiles()">📁 My Files</button>
+  <div id="headerActionBtns" style="margin-left:auto;display:flex;gap:8px">
+    <button id="doneShotsBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600" onclick="openDoneShots()">✅ Done Shots</button>
+    <button id="myFilesBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600" onclick="openMyFiles()">📁 My Files</button>
+  </div>
 </div>
 <p class="subtitle">Declined tasks (Coffeepost) — 28 shots to review</p>
 
@@ -948,7 +950,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0045</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0046</div>
 
 <script>
 const USERS = {
@@ -2094,7 +2096,11 @@ function _checkPublicDownload(){
   if(!token)return false;
   _pubDownloadMode=true;
   currentUser={id:"guest",display:"Guest",role:"guest"};
+  // Force-hide everything (belt and braces — both inline and class)
   document.querySelectorAll('body > *:not(script):not(link)').forEach(el=>el.style.display='none');
+  const lo=document.getElementById('loginOverlay');
+  if(lo){lo.classList.add('hidden');lo.style.display='none';}
+  document.documentElement.style.background='#0d1117';
   _initPublicDownload(token);
   return true;
 }
