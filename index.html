@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0072</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0073</div>
 
 <script>
 const USERS = {
@@ -3976,14 +3976,16 @@ function updateStats(){
       const col=getUserColor(a.id)||'#8b949e';
       const isActive=artistFilter===a.id;
       // Done count rendered as a green check badge floating above the
-      // top-right corner of the card. The footer line keeps the active
-      // statuses only — todo ○, in progress ◉, review ◐ — in that order.
+      // Done = green tab on top edge, review = blue tab on bottom edge.
+      // Footer line keeps todo ○ and in progress ◉ only.
       const doneBadge=s.done>0?`<div style="position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% + 1px));background:#161b22;color:#3fb950;border:1px solid #30363d;border-bottom-color:#161b22;border-radius:8px 8px 0 0;padding:1px 9px 3px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">✓ ${s.done}</div>`:'';
-      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'}" title="${active} active · ${s.done} done · ${s.total} total">
+      const reviewBadge=s.review>0?`<div style="position:absolute;left:50%;bottom:0;transform:translate(-50%,calc(100% - 1px));background:#161b22;color:#58a6ff;border:1px solid #30363d;border-top-color:#161b22;border-radius:0 0 8px 8px;padding:2px 9px 1px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">◐ ${s.review}</div>`:'';
+      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'}" title="${active} active · ${s.done} done · ${s.review} review · ${s.total} total">
         ${doneBadge}
         <div style="font-size:18px;font-weight:700;color:${col}">${active}</div>
         <div style="font-size:10px;color:#8b949e;margin:2px 0">${esc(a.display)}</div>
-        <div style="font-size:9px;color:#484f58">${s.todo}○ ${s.progress}◉ ${s.review}◐</div>
+        <div style="font-size:9px;color:#484f58">${s.todo}○ ${s.progress}◉</div>
+        ${reviewBadge}
       </div>`;
     });
     // Unassigned card
