@@ -984,7 +984,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0085</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0086</div>
 
 <script>
 const USERS = {
@@ -2166,16 +2166,24 @@ function _artistTabFilter(artistId,status,clickedEl){
       newTab.classList.add('tab-pulse');
       newTab.addEventListener('animationend',()=>newTab.classList.remove('tab-pulse'),{once:true});
     }
-    // Sheen the visible rows in the filter colour — every row at once.
+    // Sheen the visible rows in the filter colour. The first row fires
+    // instantly (no perceived click latency) and the rest get a small
+    // randomised stagger so the sweep looks organic, not perfectly
+    // synchronised.
     const rgba=_filterColors[status];
     if(rgba){
       const rows=document.querySelectorAll('#tbody tr');
-      rows.forEach(tr=>{
+      rows.forEach((tr,i)=>{
         tr.style.setProperty('--rf',rgba);
+        const jitter=i===0?0:Math.round(i*6+Math.random()*70);
+        tr.style.animationDelay=jitter+'ms';
         tr.classList.remove('row-flash');
         void tr.offsetWidth;
         tr.classList.add('row-flash');
-        tr.addEventListener('animationend',()=>tr.classList.remove('row-flash'),{once:true});
+        tr.addEventListener('animationend',()=>{
+          tr.classList.remove('row-flash');
+          tr.style.animationDelay='';
+        },{once:true});
       });
     }
   });
