@@ -161,23 +161,37 @@
   .search-row input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 12px; border-radius: 6px; font-size: 14px; width: 260px; }
   .search-row input::placeholder { color: #484f58; }
   /* Stack of "All Artists" + "Unassigned" — two artist-cards layered.
-     Back card peeks out top-LEFT with a CCW tilt. On hover the cards
-     spread by data-artist (NOT by stack position) so 'All' always
-     slides left and 'Unassigned' always slides right. */
+     Idle: back peeks out top-LEFT, front sits on top. Hover spreads
+     them by data-artist (All always left, Unassigned always right).
+     Spread offsets use individual `translate` / `rotate` properties
+     so a `transform: translateY()` float animation can run on top
+     without overwriting the spread. Front card keeps its z-index 2
+     so during the transition it's never covered by the back card. */
   .all-stack { position: relative; align-self: stretch; }
   /* Invisible hover bridge — extends the hit area so the user can move
      the mouse between the two spread cards without dropping :hover. */
   .all-stack::before {
     content: '';
     position: absolute;
-    top: -50px; left: -55px; right: -55px; bottom: -8px;
+    top: -55px; left: -60px; right: -60px; bottom: -10px;
     z-index: 0;
   }
-  .all-stack .stack-front { position: relative; z-index: 2; transition: transform 0.3s ease, box-shadow 0.3s; }
-  .all-stack .stack-back  { position: absolute; inset: 0; z-index: 1; transform: translate(-9px, -7px) rotate(-5deg); transition: transform 0.3s ease, box-shadow 0.3s; transform-origin: bottom right; }
+  .all-stack .stack-front { position: relative; z-index: 2; transition: translate 0.3s ease, rotate 0.3s ease, box-shadow 0.3s; }
+  .all-stack .stack-back  { position: absolute; inset: 0; z-index: 1; translate: -9px -7px; rotate: -5deg; transition: translate 0.3s ease, rotate 0.3s ease, box-shadow 0.3s; transform-origin: bottom right; }
+  .all-stack:hover [data-artist="all"]        { translate: -45px -30px; rotate: -6deg; box-shadow: 0 8px 22px rgba(0,0,0,0.6); animation: cardFloatA 2.6s ease-in-out 0.35s infinite; }
+  .all-stack:hover [data-artist="unassigned"] { translate: 45px -30px;  rotate: 6deg;  box-shadow: 0 8px 22px rgba(0,0,0,0.6); animation: cardFloatB 2.4s ease-in-out 0.45s infinite; }
   .all-stack:hover { z-index: 50; }
-  .all-stack:hover [data-artist="all"]        { transform: translate(-50px, -32px) rotate(-6deg); box-shadow: 0 8px 22px rgba(0,0,0,0.6); z-index: 3; }
-  .all-stack:hover [data-artist="unassigned"] { transform: translate(50px, -32px) rotate(6deg);  box-shadow: 0 8px 22px rgba(0,0,0,0.6); z-index: 3; }
+  /* Subtle "alive" idle motion while the cards are in their spread
+     position. Uses transform (separate from translate/rotate above)
+     so the float doesn't fight the spread offsets. */
+  @keyframes cardFloatA {
+    0%, 100% { transform: translateY(0)    rotate(0deg);  }
+    50%      { transform: translateY(-4px) rotate(0.6deg); }
+  }
+  @keyframes cardFloatB {
+    0%, 100% { transform: translateY(0)    rotate(0deg);  }
+    50%      { transform: translateY(-3px) rotate(-0.6deg); }
+  }
   .artist-card { background: #161b22; border-radius: 8px; padding: 6px 12px; text-align: center; min-width: 80px; transition: .15s; cursor: pointer; user-select: none; border: 1px solid #30363d; }
   .artist-card:hover { border-color: #58a6ff !important; }
   /* Active state: outline instead of border-width change so the padding
@@ -1005,7 +1019,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0091</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0092</div>
 
 <script>
 const USERS = {
