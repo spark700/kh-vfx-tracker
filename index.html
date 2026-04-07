@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0068</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0069</div>
 
 <script>
 const USERS = {
@@ -3955,21 +3955,28 @@ function updateStats(){
   const el=document.getElementById("artistStats");
   if(el){
     const artists=_getArtists();
-    let totalAssigned=0;artists.forEach(a=>{totalAssigned+=(ac[a.id]?.total||0);});
+    // The big number on each artist card should reflect the WORKLOAD
+    // that still needs attention — total minus already-done shots.
+    let totalActive=0;
+    artists.forEach(a=>{
+      const s=ac[a.id]||{total:0,done:0};
+      totalActive+=Math.max(0,s.total-s.done);
+    });
     let html='';
     // All Artists card
     html+=`<div class="artist-card${artistFilter==='all'?' active':''}" data-artist="all" style="border-color:#58a6ff44">
-      <div style="font-size:18px;font-weight:700;color:#58a6ff">${totalAssigned}</div>
+      <div style="font-size:18px;font-weight:700;color:#58a6ff">${totalActive}</div>
       <div style="font-size:10px;color:#8b949e;margin:2px 0">All Artists</div>
       <div style="font-size:9px;color:#484f58">&nbsp;</div>
     </div>`;
     // Per-artist cards
     artists.forEach(a=>{
       const s=ac[a.id]||{total:0,done:0,todo:0,progress:0,review:0};
+      const active=Math.max(0,s.total-s.done);
       const col=getUserColor(a.id)||'#8b949e';
       const isActive=artistFilter===a.id;
-      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="border-color:${col}${isActive?'':'44'}">
-        <div style="font-size:18px;font-weight:700;color:${col}">${s.total}</div>
+      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="border-color:${col}${isActive?'':'44'}" title="${active} active · ${s.done} done · ${s.total} total">
+        <div style="font-size:18px;font-weight:700;color:${col}">${active}</div>
         <div style="font-size:10px;color:#8b949e;margin:2px 0">${esc(a.display)}</div>
         <div style="font-size:9px;color:#484f58">${s.done}✓ ${s.progress}◉ ${s.todo}○</div>
       </div>`;
