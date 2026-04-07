@@ -160,6 +160,16 @@
   .search-row { margin-bottom: 12px; }
   .search-row input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 12px; border-radius: 6px; font-size: 14px; width: 260px; }
   .search-row input::placeholder { color: #484f58; }
+  /* Stack of "All Artists" + "Unassigned" — two artist-cards layered.
+     The front card peeks the back one out the bottom-right with a tilt
+     so it's clear something is hidden underneath. On hover the two
+     cards slide diagonally apart so you can pick one. */
+  .all-stack { position: relative; align-self: stretch; }
+  .all-stack .stack-front { position: relative; z-index: 2; transition: transform 0.3s ease, box-shadow 0.3s; }
+  .all-stack .stack-back  { position: absolute; inset: 0; z-index: 1; transform: translate(7px, 5px) rotate(4deg); transition: transform 0.3s ease, box-shadow 0.3s; transform-origin: top left; }
+  .all-stack:hover { z-index: 50; }
+  .all-stack:hover .stack-front { transform: translate(-18px, -22px) rotate(-4deg); box-shadow: 0 6px 18px rgba(0,0,0,0.55); }
+  .all-stack:hover .stack-back  { transform: translate(18px, -22px) rotate(4deg);  box-shadow: 0 6px 18px rgba(0,0,0,0.55); }
   .artist-card { background: #161b22; border-radius: 8px; padding: 6px 12px; text-align: center; min-width: 80px; transition: .15s; cursor: pointer; user-select: none; border: 1px solid #30363d; }
   .artist-card:hover { border-color: #58a6ff !important; }
   /* Active state: outline instead of border-width change so the padding
@@ -987,7 +997,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0088</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0089</div>
 
 <script>
 const USERS = {
@@ -2137,7 +2147,11 @@ document.getElementById("statusStats").addEventListener("click",e=>{
 document.getElementById("artistStats").addEventListener("click",e=>{
   const card=e.target.closest(".artist-card[data-artist]");
   if(!card)return;
-  artistFilter=card.dataset.artist;
+  const id=card.dataset.artist;
+  artistFilter=id;
+  // Remember which side of the All / Unassigned stack the user picked
+  // so the next render shows it on top.
+  if(id==='all'||id==='unassigned')window._allStackTop=id;
   // Keep whatever status filter the user already had selected — picking
   // a different artist must not silently drop the REVIEW / DONE / TODO
   // filter that was in effect.
@@ -4041,12 +4055,24 @@ function updateStats(){
       totalActive+=Math.max(0,s.total-s.done);
     });
     let html='';
-    // All Artists card
-    html+=`<div class="artist-card${artistFilter==='all'?' active':''}" data-artist="all" style="border-color:#58a6ff44">
+    // All Artists / Unassigned stack — two cards layered, hover separates
+    // them so the user can pick one. Top card = whichever was selected
+    // last (defaults to 'all'). Both cards still carry .artist-card so
+    // the existing click delegation handler picks them up.
+    const stackTop=window._allStackTop||'all';
+    const allCard=`<div class="artist-card stack-front${artistFilter==='all'?' active':''}" data-artist="all" style="border-color:#58a6ff44;color:#58a6ff">
       <div style="font-size:18px;font-weight:700;color:#58a6ff">${totalActive}</div>
       <div style="font-size:10px;color:#8b949e;margin:2px 0">All Artists</div>
       <div style="font-size:9px;color:#484f58">&nbsp;</div>
     </div>`;
+    const unassignedCard=`<div class="artist-card stack-front${artistFilter==='unassigned'?' active':''}" data-artist="unassigned" style="border-color:#8b949e44;color:#8b949e">
+      <div style="font-size:18px;font-weight:700;color:#8b949e">${unassignedCount}</div>
+      <div style="font-size:10px;color:#8b949e;margin:2px 0">Unassigned</div>
+      <div style="font-size:9px;color:#484f58">&nbsp;</div>
+    </div>`;
+    const allCardBack=allCard.replace('stack-front','stack-back');
+    const unassignedCardBack=unassignedCard.replace('stack-front','stack-back');
+    html+=`<div class="all-stack" data-stack-top="${stackTop}">${stackTop==='all'?(allCard+unassignedCardBack):(unassignedCard+allCardBack)}</div>`;
     // Per-artist cards
     artists.forEach(a=>{
       const s=ac[a.id]||{total:0,done:0,todo:0,progress:0,review:0};
@@ -4070,12 +4096,6 @@ function updateStats(){
         ${reviewBadge}
       </div>`;
     });
-    // Unassigned card
-    html+=`<div class="artist-card${artistFilter==='unassigned'?' active':''}" data-artist="unassigned" style="border-color:#8b949e44">
-      <div style="font-size:18px;font-weight:700;color:#8b949e">${unassignedCount}</div>
-      <div style="font-size:10px;color:#8b949e;margin:2px 0">Unassigned</div>
-      <div style="font-size:9px;color:#484f58">&nbsp;</div>
-    </div>`;
     el.innerHTML=html;
   }
 }
