@@ -326,6 +326,44 @@ async function handleTgPush(request, env) {
     return _jsonResp({ ok: true, mode: 'download+button', message_id: tgData.result?.message_id }, 200, origin);
   }
 
+  // ── FINAL REQUEST: ping the assigned artist in their topic to say
+  // the shot is approved and ready for the final render upload.
+  // Admin only. Lands in the artist's thread inside KILLHOUSE _contora.
+  if (kind === 'final_request') {
+    if (!callerIsAdmin) {
+      return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
+    }
+    if (!artistId) {
+      return _jsonResp({ ok: false, error: 'missing_artist' }, 400, origin);
+    }
+    const safeShotFr = _escapeHtml(shotId);
+    const safeFromFr = _escapeHtml(fromUser || 'admin');
+    const safeCommentFr = _escapeHtml((comment || '').slice(0, 500));
+    const trackerLink = `https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(shotId)}`;
+    const text =
+      `🎬 <b>${safeShotFr}</b> — <b>APPROVED</b>\n\n` +
+      `✅ Client approved the shot. You can upload the final render.` +
+      (safeCommentFr ? `\n\n📝 ${safeCommentFr}` : '') +
+      `\n\n<i>by ${safeFromFr}</i>`;
+    const reply_markup = { inline_keyboard: [[{ text: '🗂 Open shot', url: trackerLink }]] };
+    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const tgResp = await fetch(tgUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_withChat({
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup,
+      })),
+    });
+    const tgData = await tgResp.json().catch(() => ({}));
+    if (!tgResp.ok || !tgData.ok) {
+      return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || tgResp.status }, 502, origin);
+    }
+    return _jsonResp({ ok: true, mode: 'final_request', message_id: tgData.result?.message_id }, 200, origin);
+  }
+
   // Build HTML message
   const safeShot = _escapeHtml(shotId);
   const safeDesc = _escapeHtml(shotDesc || '').slice(0, 120);

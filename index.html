@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0060</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0061</div>
 
 <script>
 const USERS = {
@@ -2339,6 +2339,47 @@ function _dlRevokeShare(token){
 }
 function _doneShareFolder(shotId){
   _shareDownloadLink([shotId],'Final files for shot:');
+}
+// Red shot helper: ping the assigned artist in their Telegram topic to
+// say "client approved this shot, please upload the final render".
+async function _pingArtistFinalRequest(shotId){
+  if(!isAdmin())return;
+  if(!shotId)return;
+  const assignee=getAssignee(shotId);
+  if(!assignee){alert('No artist assigned to '+shotId);return;}
+  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+    alert("Your account has no link token. Ask admin to regenerate.");return;
+  }
+  if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
+  const subject=`${shotId} → ${assignee}\n\nNotify the artist that the shot was approved by the client and the final render can be uploaded.`;
+  const comment=await _showPushPrompt("Request final upload",subject);
+  if(comment===null)return;
+  const desc=getDesc(shotId,(TASKS.find(t=>t.id===shotId)?.desc)||"");
+  const fromUser=currentUser.display||currentUser.id;
+  try{
+    const r=await fetch(TG_PUSH_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        kind:"final_request",
+        shotId,
+        shotDesc:desc,
+        artistId:assignee,
+        comment,
+        fromUser,
+        userId:currentUser.id,
+        linkToken:state.__users[currentUser.id].linkToken
+      })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.ok)throw new Error(data.error||('HTTP '+r.status));
+    _lastPushAt=Date.now();
+    // Brief in-app feedback
+    if(typeof _showAlert==='function'){_showAlert('Sent','Artist '+assignee+' notified about '+shotId);}
+  }catch(e){
+    console.error("Final request push failed:",e);
+    alert("Push failed: "+(e.message||e));
+  }
 }
 function _doneShareSelected(){
   // Only green shots: status=done AND has final files
@@ -6427,7 +6468,7 @@ function _renderShotFiles(id,overrideBody){
       if(f.locked)lastWasLocked=true;
       const lock=f.locked?` 🔒`:'';
       const delBtn=(!f.locked&&_canUpload(id))?`<button class="f-dl" onclick="event.stopPropagation();_deleteFolder('${id}','${esc(f.name)}')" title="Delete folder">🗑</button>`:'';
-      const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:((id==='__doneshots'&&f.colorTag==='#3fb950')?`<button class="f-dl" onclick="event.stopPropagation();_doneShareFolder('${esc(f.name)}')" title="Share download link">🔗</button>`:'');
+      const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:((id==='__doneshots'&&f.colorTag==='#3fb950')?`<button class="f-dl" onclick="event.stopPropagation();_doneShareFolder('${esc(f.name)}')" title="Share download link">🔗</button>`:((id==='__doneshots'&&f.colorTag==='#f85149')?`<button class="f-dl" onclick="event.stopPropagation();_pingArtistFinalRequest('${esc(f.name)}')" title="Ping artist — request final upload" style="color:#f85149">📣</button>`:''));
       const editCell=id==='__admin'?'':_renderEditCell(id,f.name);
       const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:` data-locked-folder="1"`;
       const selAttr=` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`;
