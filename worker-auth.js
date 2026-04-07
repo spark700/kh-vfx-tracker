@@ -379,6 +379,209 @@ async function handleTgPush(request, env) {
   return _jsonResp({ ok: true, message_id: tgData.result?.message_id }, 200, origin);
 }
 
+// ── Update processing (shared by /tg/webhook and the legacy /tg/ping
+// drain). Mutates `stateData` in place. Returns true if anything
+// interesting changed and the caller should persist.
+async function _processTelegramUpdate(env, stateData, update, ctx) {
+  if (!update) return false;
+  ctx = ctx || {};
+  const tgUsersMap = ctx.tgUsersMap || {};
+  const tgChatsMap = ctx.tgChatsMap || {};
+  let dirty = false;
+
+  function _captureChat(c) {
+    if (!c || !c.id) return;
+    const id = String(c.id);
+    if (tgChatsMap[id]) return;
+    tgChatsMap[id] = {
+      id: c.id,
+      type: c.type || null,
+      title: c.title || null,
+      is_forum: !!c.is_forum,
+      username: c.username || null,
+      first_name: c.first_name || null,
+    };
+    dirty = true;
+  }
+  function _captureUser(u) {
+    if (!u || !u.id || u.is_bot) return;
+    const id = String(u.id);
+    if (tgUsersMap[id]) return;
+    tgUsersMap[id] = {
+      id: u.id,
+      username: u.username || null,
+      first_name: u.first_name || null,
+      last_name: u.last_name || null,
+      avatar_url: `https://killhouse-vfx.contora.workers.dev/tg/avatar?u=${u.id}`,
+    };
+    dirty = true;
+  }
+
+  if (update.my_chat_member && update.my_chat_member.chat) _captureChat(update.my_chat_member.chat);
+  if (update.chat_member && update.chat_member.chat) _captureChat(update.chat_member.chat);
+
+  const m = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
+  if (m) {
+    _captureChat(m.chat);
+    _captureUser(m.from);
+    if (m.reply_to_message) _captureUser(m.reply_to_message.from);
+    const entities = (m.entities || []).concat(m.caption_entities || []);
+    for (const ent of entities) {
+      if (ent.type === 'text_mention' && ent.user) _captureUser(ent.user);
+    }
+    // Topic name discovery
+    if (m.forum_topic_created && m.message_thread_id) {
+      if (!stateData.__bot) stateData.__bot = {};
+      if (!stateData.__bot.topicNames) stateData.__bot.topicNames = {};
+      if (stateData.__bot.topicNames[m.message_thread_id] !== m.forum_topic_created.name) {
+        stateData.__bot.topicNames[m.message_thread_id] = m.forum_topic_created.name;
+        dirty = true;
+      }
+    }
+    const rt = m.reply_to_message;
+    if (rt && rt.forum_topic_created && rt.message_thread_id) {
+      if (!stateData.__bot) stateData.__bot = {};
+      if (!stateData.__bot.topicNames) stateData.__bot.topicNames = {};
+      if (stateData.__bot.topicNames[rt.message_thread_id] !== rt.forum_topic_created.name) {
+        stateData.__bot.topicNames[rt.message_thread_id] = rt.forum_topic_created.name;
+        dirty = true;
+      }
+    }
+    // Download-share deep link: /start dl_<token>
+    if (m.text && m.text.indexOf('/start dl_') === 0 && m.from) {
+      const dlToken = m.text.substring('/start dl_'.length).trim();
+      if (dlToken && /^[a-z0-9]{6,40}$/i.test(dlToken)) {
+        const node = _ensureTrackingNode(stateData, dlToken);
+        const uid = String(m.from.id);
+        if (!node.users[uid]) {
+          node.users[uid] = {
+            id: m.from.id,
+            username: m.from.username || null,
+            first_name: m.from.first_name || null,
+            last_name: m.from.last_name || null,
+            visited_at: Date.now(),
+            files: {},
+          };
+        } else {
+          node.users[uid].username = m.from.username || node.users[uid].username;
+          node.users[uid].first_name = m.from.first_name || node.users[uid].first_name;
+          if (!node.users[uid].visited_at) node.users[uid].visited_at = Date.now();
+        }
+        dirty = true;
+        // Reply with file list + Open download page button
+        try {
+          const targetUrl = `https://spark700.github.io/kh-vfx-tracker/?download=${encodeURIComponent(dlToken)}&u=${encodeURIComponent(uid)}`;
+          const share = (stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
+          const ids = (share && share.ids) || [];
+          const fileLines = [];
+          let totalBytes = 0, totalFiles = 0;
+          for (const sid of ids) {
+            const arr = (stateData[sid] && stateData[sid].files && stateData[sid].files['versions/final']) || [];
+            for (const f of arr) {
+              fileLines.push('• ' + _escapeHtml(sid + '_FINAL/' + (f.name || '')));
+              totalBytes += (f.size || 0);
+              totalFiles += 1;
+            }
+          }
+          const sizeStr = totalBytes
+            ? (totalBytes < 1024 * 1024
+              ? Math.round(totalBytes / 1024) + ' KB'
+              : totalBytes < 1024 * 1024 * 1024
+                ? (totalBytes / (1024 * 1024)).toFixed(1) + ' MB'
+                : (totalBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB')
+            : '';
+          const header = `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!`;
+          const summary = totalFiles
+            ? `\n\n<b>${totalFiles} file${totalFiles !== 1 ? 's' : ''}${sizeStr ? ' · ' + sizeStr : ''}</b>`
+            : '';
+          const list = fileLines.length
+            ? '\n\n' + fileLines.slice(0, 40).join('\n') + (fileLines.length > 40 ? `\n…+${fileLines.length - 40} more` : '')
+            : '';
+          const replyText = header + summary + list;
+          await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: m.chat.id,
+              text: replyText,
+              parse_mode: 'HTML',
+              disable_web_page_preview: true,
+              reply_markup: { inline_keyboard: [[{ text: '⬇ Open download page', url: targetUrl }]] },
+            }),
+          });
+        } catch (e) { /* best-effort */ }
+      }
+    }
+  }
+  return dirty;
+}
+
+// ── /tg/webhook — Telegram webhook endpoint ──
+// Telegram POSTs every update here in real time. We process it inline,
+// persist any new users/chats/topics back to Supabase, and reply to
+// /start dl_<token> deep links immediately. Setup once via setWebhook.
+async function handleTgWebhook(request, env) {
+  if (request.method !== 'POST') return new Response('method', { status: 405 });
+  // Verify Telegram secret to keep random callers out
+  if (env.WEBHOOK_SECRET) {
+    const got = request.headers.get('X-Telegram-Bot-Api-Secret-Token') || '';
+    if (got !== env.WEBHOOK_SECRET) return new Response('forbidden', { status: 403 });
+  }
+  let update;
+  try { update = await request.json(); } catch (e) { return new Response('bad', { status: 400 }); }
+  // Pull state once, mutate, write back if anything changed.
+  const stateData = await _fetchState();
+  if (!stateData) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  if (!stateData.__bot) stateData.__bot = {};
+  // Seed maps from existing cache so capture functions can dedupe
+  const tgUsersMap = {};
+  for (const u of (stateData.__bot.tgUsers || [])) { if (u && u.id) tgUsersMap[String(u.id)] = u; }
+  const tgChatsMap = {};
+  for (const c of (stateData.__bot.knownChats || [])) { if (c && c.id) tgChatsMap[String(c.id)] = c; }
+  const dirty = await _processTelegramUpdate(env, stateData, update, { tgUsersMap, tgChatsMap });
+  if (dirty) {
+    stateData.__bot.tgUsers = Object.values(tgUsersMap);
+    stateData.__bot.knownChats = Object.values(tgChatsMap);
+    await _writeStateData(stateData);
+  }
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
+
+// ── /tg/setup-webhook — one-shot helper to point Telegram at our worker ──
+// Protected by ?key=<admin linkToken>. Usage:
+//   curl -X POST "https://killhouse-vfx.contora.workers.dev/tg/setup-webhook?key=<admin linkToken>"
+async function handleTgSetupWebhook(request, env) {
+  if (request.method !== 'POST') return new Response('method', { status: 405 });
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key') || '';
+  if (!key) return new Response(JSON.stringify({ ok: false, error: 'missing_key' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  // Validate the key matches an admin user's linkToken
+  const stateData = await _fetchState();
+  let isAdmin = false;
+  if (stateData && stateData.__users) {
+    for (const u of Object.values(stateData.__users)) {
+      if (u && u.role === 'admin' && u.linkToken === key) { isAdmin = true; break; }
+    }
+  }
+  if (!isAdmin) return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  if (!env.TELEGRAM_BOT_TOKEN) return new Response(JSON.stringify({ ok: false, error: 'no_token' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  const webhookUrl = `https://killhouse-vfx.contora.workers.dev/tg/webhook`;
+  const setUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook`;
+  const body = {
+    url: webhookUrl,
+    drop_pending_updates: true,
+    allowed_updates: ['message', 'edited_message', 'channel_post', 'edited_channel_post', 'my_chat_member', 'chat_member'],
+  };
+  if (env.WEBHOOK_SECRET) body.secret_token = env.WEBHOOK_SECRET;
+  const r = await fetch(setUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json().catch(() => ({}));
+  return new Response(JSON.stringify({ ok: r.ok && j.ok, telegram: j }), { status: r.ok ? 200 : 502, headers: { 'Content-Type': 'application/json' } });
+}
+
 // ── /tg/avatar — proxies a user's profile photo from Telegram ──
 // Public (no auth) so <img src="/tg/avatar?u=123"> works directly. The bot
 // token is kept on the worker side and never reaches the browser.
@@ -481,138 +684,16 @@ async function handleTgPing(request, env) {
       avatar_url: `https://killhouse-vfx.contora.workers.dev/tg/avatar?u=${u.id}`,
     };
   }
+  // Note: getUpdates polling has been removed — the bot now uses /tg/webhook
+  // for real-time delivery. User/chat/topic discovery happens in the webhook
+  // handler and is persisted into state.__bot directly. This /tg/ping call
+  // is now mostly a "warm cache + admin lookup" endpoint.
   if (hasToken) {
     try {
-      // Drain the getUpdates queue: walk it batch-by-batch advancing offset
-      // each round so messages beyond the 100-update limit also get
-      // captured. Each round confirms (acks) the previous batch — that's
-      // fine because every captured user is then persisted to Supabase
-      // below, so we never lose them across calls.
-      let lastSeenId = (stateData && stateData.__bot && stateData.__bot.lastUpdateId) || 0;
-      let nextOffset = lastSeenId ? lastSeenId + 1 : 0;
-      let rounds = 0;
-      while (rounds < 6) {
-      const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=${nextOffset}&limit=100&timeout=0`);
-      const j = await r.json();
-      if (j && j.ok && Array.isArray(j.result)) {
-        if (!j.result.length) break;
-        for (const u of j.result) {
-          if (u.update_id > lastSeenId) lastSeenId = u.update_id;
-        }
-        nextOffset = lastSeenId + 1;
-        for (const u of j.result) {
-          // Bot membership change events expose chat info too
-          if (u.my_chat_member && u.my_chat_member.chat) _captureChat(u.my_chat_member.chat);
-          if (u.chat_member && u.chat_member.chat) _captureChat(u.chat_member.chat);
-          const m = u.message || u.edited_message || u.channel_post || u.edited_channel_post;
-          if (!m) continue;
-          // Capture the chat the message came from
-          _captureChat(m.chat);
-          // Topic name discovery
-          if (m.forum_topic_created && m.message_thread_id) {
-            topicNames[m.message_thread_id] = m.forum_topic_created.name;
-          }
-          const rt = m.reply_to_message;
-          if (rt && rt.forum_topic_created && rt.message_thread_id) {
-            topicNames[rt.message_thread_id] = rt.forum_topic_created.name;
-          }
-          // User discovery — message senders + reply targets
-          _captureUser(m.from);
-          if (rt) _captureUser(rt.from);
-          // Mentions (@username) in entities
-          const entities = (m.entities || []).concat(m.caption_entities || []);
-          for (const ent of entities) {
-            if (ent.type === 'text_mention' && ent.user) _captureUser(ent.user);
-          }
-          // ── Download-share deep link: /start dl_<token> ──
-          // The user opened the bot via the t.me/<bot>?start=dl_TOKEN link
-          // we sent in a client chat. Capture them as a visitor and reply
-          // with the actual download URL (carrying their Telegram id).
-          if (m.text && m.text.indexOf('/start dl_') === 0 && m.from) {
-            const dlToken = m.text.substring('/start dl_'.length).trim();
-            if (dlToken && /^[a-z0-9]{6,40}$/i.test(dlToken)) {
-              const node = _ensureTrackingNode(stateData, dlToken);
-              const uid = String(m.from.id);
-              if (!node.users[uid]) {
-                node.users[uid] = {
-                  id: m.from.id,
-                  username: m.from.username || null,
-                  first_name: m.from.first_name || null,
-                  last_name: m.from.last_name || null,
-                  visited_at: Date.now(),
-                  files: {},
-                };
-              } else {
-                // Update name in case it changed
-                node.users[uid].username = m.from.username || node.users[uid].username;
-                node.users[uid].first_name = m.from.first_name || node.users[uid].first_name;
-                if (!node.users[uid].visited_at) node.users[uid].visited_at = Date.now();
-              }
-              // Send the user the actual download URL (carrying their uid),
-              // plus the full file list so they can see what's inside
-              // before clicking through to the page.
-              try {
-                const targetUrl = `https://spark700.github.io/kh-vfx-tracker/?download=${encodeURIComponent(dlToken)}&u=${encodeURIComponent(uid)}`;
-                // Build per-shot file list straight from stateData
-                const share = (stateData && stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
-                const ids = (share && share.ids) || [];
-                const fileLines = [];
-                let totalBytes = 0, totalFiles = 0;
-                for (const sid of ids) {
-                  const arr = (stateData && stateData[sid] && stateData[sid].files && stateData[sid].files['versions/final']) || [];
-                  for (const f of arr) {
-                    fileLines.push('• ' + _escapeHtml(sid + '_FINAL/' + (f.name || '')));
-                    totalBytes += (f.size || 0);
-                    totalFiles += 1;
-                  }
-                }
-                const sizeStr = totalBytes
-                  ? (totalBytes < 1024 * 1024
-                    ? Math.round(totalBytes / 1024) + ' KB'
-                    : totalBytes < 1024 * 1024 * 1024
-                      ? (totalBytes / (1024 * 1024)).toFixed(1) + ' MB'
-                      : (totalBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB')
-                  : '';
-                const header = `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!`;
-                const summary = totalFiles
-                  ? `\n\n<b>${totalFiles} file${totalFiles !== 1 ? 's' : ''}${sizeStr ? ' · ' + sizeStr : ''}</b>`
-                  : '';
-                const list = fileLines.length
-                  ? '\n\n' + fileLines.slice(0, 40).join('\n') + (fileLines.length > 40 ? `\n…+${fileLines.length - 40} more` : '')
-                  : '';
-                const replyText = header + summary + list;
-                await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    chat_id: m.chat.id,
-                    text: replyText,
-                    parse_mode: 'HTML',
-                    disable_web_page_preview: true,
-                    reply_markup: { inline_keyboard: [[{ text: '⬇ Open download page', url: targetUrl }]] },
-                  }),
-                });
-              } catch (e) { /* best-effort */ }
-            }
-          }
-        }
-        rounds++;
-        // Stop draining when this batch returned less than the limit
-        if (j.result.length < 100) break;
-      } else {
-        break;
-      }
-      } // end while (rounds < 6)
-      // Persist the new offset so the next /tg/ping starts where we stopped
-      if (lastSeenId && stateData && stateData.__bot) {
-        stateData.__bot.lastUpdateId = lastSeenId;
-      }
       // Always include the configured push chat as a known one
-      try {
-        const ccr = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${encodeURIComponent(TG_CHAT_ID)}`);
-        const ccj = await ccr.json();
-        if (ccj && ccj.ok && ccj.result) _captureChat(ccj.result);
-      } catch (e) {}
+      const ccr = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${encodeURIComponent(TG_CHAT_ID)}`);
+      const ccj = await ccr.json();
+      if (ccj && ccj.ok && ccj.result) _captureChat(ccj.result);
     } catch (e) {}
   }
   // Build the full list of chats whose members are interesting:
@@ -834,6 +915,12 @@ export default {
     }
     if (url.pathname === '/tg/track') {
       return handleTgTrack(request, env);
+    }
+    if (url.pathname === '/tg/webhook') {
+      return handleTgWebhook(request, env);
+    }
+    if (url.pathname === '/tg/setup-webhook') {
+      return handleTgSetupWebhook(request, env);
     }
 
     // Telegram link-preview / redirect for player deep links
