@@ -950,7 +950,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0047</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0048</div>
 
 <script>
 const USERS = {
@@ -2089,10 +2089,12 @@ function _doneShareSelected(){
 }
 
 // === PUBLIC DOWNLOAD PAGE ===
-// var (not let): boot at ~1626 calls _checkPublicDownload before this line
-// is reached. let would TDZ-throw and silently kill the boot, leaving the
-// login overlay visible.
-var _pubDownloadMode=false;
+// var with NO initializer: boot at ~1626 calls _checkPublicDownload which
+// assigns _pubDownloadMode=true. If we wrote `var _pubDownloadMode=false`
+// here, the initializer would run AFTER boot in source order and clobber
+// true back to false. Bare `var` only hoists the declaration; default is
+// undefined (falsy) which is what we want pre-boot.
+var _pubDownloadMode;
 function _checkPublicDownload(){
   const params=new URLSearchParams(window.location.search);
   const token=params.get('download');
