@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0070</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0071</div>
 
 <script>
 const USERS = {
@@ -3978,7 +3978,7 @@ function updateStats(){
       // Done count rendered as a green check badge floating above the
       // top-right corner of the card. The footer line keeps the active
       // statuses only — todo ○, in progress ◉, review ◐ — in that order.
-      const doneBadge=s.done>0?`<div style="position:absolute;top:-8px;right:-6px;background:#238636;color:#fff;border:1px solid #2ea043;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;line-height:1.4;display:flex;align-items:center;gap:2px;box-shadow:0 2px 4px rgba(0,0,0,0.4)">✓ ${s.done}</div>`:'';
+      const doneBadge=s.done>0?`<div style="position:absolute;top:-8px;right:-6px;background:#0d1117;color:#3fb950;border:1px solid #30363d;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:600;line-height:1.4;display:flex;align-items:center;gap:2px">✓ ${s.done}</div>`:'';
       html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'}" title="${active} active · ${s.done} done · ${s.total} total">
         ${doneBadge}
         <div style="font-size:18px;font-weight:700;color:${col}">${active}</div>
