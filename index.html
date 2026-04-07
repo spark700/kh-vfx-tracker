@@ -962,7 +962,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0076</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0077</div>
 
 <script>
 const USERS = {
@@ -3979,11 +3979,17 @@ function updateStats(){
       const isActive=artistFilter===a.id;
       // Done count rendered as a green check badge floating above the
       // Done = green tab on top edge, review = blue tab on bottom edge.
-      // Review pill uses ◉ now (the progress icon was swapped over so the
-      // review tab gets the "fully drawn" circle and progress gets the
-      // half-drawn one in the footer line).
-      const doneBadge=s.done>0?`<div style="position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% + 1px));background:#161b22;color:#3fb950;border:1px solid #30363d;border-bottom-color:#161b22;border-radius:8px 8px 0 0;padding:1px 9px 3px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">✓ ${s.done}</div>`:'';
-      const reviewBadge=s.review>0?`<div style="position:absolute;left:50%;bottom:0;transform:translate(-50%,calc(100% - 1px));background:#161b22;color:#58a6ff;border:1px solid #30363d;border-top-color:#161b22;border-radius:0 0 8px 8px;padding:2px 9px 1px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">◉ ${s.review}</div>`:'';
+      // When the card is the active filter the tabs grow a bit, swap to
+      // the artist colour outline and shift slightly outward — clear
+      // selection feedback consistent across every artist.
+      const tabBorder=isActive?col:'#30363d';
+      const tabPadDone=isActive?'2px 11px 4px':'1px 9px 3px';
+      const tabPadRev=isActive?'3px 11px 2px':'2px 9px 1px';
+      const tabFs=isActive?'11px':'10px';
+      const tabFw=isActive?'700':'600';
+      const tabShift=isActive?'2px':'0px';
+      const doneBadge=s.done>0?`<div style="position:absolute;left:50%;top:-${tabShift};transform:translate(-50%,calc(-100% + 1px));background:#161b22;color:#3fb950;border:1px solid ${tabBorder};border-bottom-color:#161b22;border-radius:8px 8px 0 0;padding:${tabPadDone};font-size:${tabFs};font-weight:${tabFw};line-height:1.2;display:flex;align-items:center;gap:3px;transition:all 0.15s">✓ ${s.done}</div>`:'';
+      const reviewBadge=s.review>0?`<div style="position:absolute;left:50%;bottom:-${tabShift};transform:translate(-50%,calc(100% - 1px));background:#161b22;color:#58a6ff;border:1px solid ${tabBorder};border-top-color:#161b22;border-radius:0 0 8px 8px;padding:${tabPadRev};font-size:${tabFs};font-weight:${tabFw};line-height:1.2;display:flex;align-items:center;gap:3px;transition:all 0.15s">◉ ${s.review}</div>`:'';
       html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'};color:${col}" title="${active} active · ${s.done} done · ${s.review} review · ${s.total} total">
         ${doneBadge}
         <div style="font-size:11px;color:#8b949e;font-weight:600">${esc(a.display)}</div>
