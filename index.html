@@ -173,14 +173,22 @@
     100% { box-shadow: 0 0 0 0 currentColor; background-color: #161b22; }
   }
   .tab-pulse { animation: tabPulse 0.55s ease-out; }
-  /* Row flash — table rows briefly take on the filter colour after a
-     status filter is applied so the user can see what just changed.
-     The colour is supplied per-row via the --rf custom property. */
-  @keyframes rowFlash {
-    0%   { background-color: var(--rf, rgba(88,166,255,0.27)); }
-    100% { background-color: transparent; }
+  /* Row sheen — a translucent diagonal stripe sweeps across each row
+     after a status filter is applied. The colour comes from the
+     per-row --rf custom property so done flashes green, review blue,
+     etc. The stripe is a linear-gradient layered on top of the row's
+     normal background, animated via background-position. */
+  @keyframes rowSheen {
+    0%   { background-position: -150% 0; }
+    100% { background-position: 250% 0; }
   }
-  tbody tr.row-flash { animation: rowFlash 0.8s ease-out; }
+  tbody tr.row-flash {
+    background-image: linear-gradient(105deg, transparent 38%, var(--rf, rgba(88,166,255,0.55)) 50%, transparent 62%);
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    background-position: -150% 0;
+    animation: rowSheen 0.9s ease-out;
+  }
   .separator { color: #30363d; font-size: 18px; user-select: none; }
   table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; }
   thead th { background: #21262d; padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363d; cursor: pointer; user-select: none; white-space: nowrap; position: relative; }
@@ -978,7 +986,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0083</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0084</div>
 
 <script>
 const USERS = {
@@ -2160,16 +2168,22 @@ function _artistTabFilter(artistId,status,clickedEl){
       newTab.classList.add('tab-pulse');
       newTab.addEventListener('animationend',()=>newTab.classList.remove('tab-pulse'),{once:true});
     }
-    // Flash the visible rows in the filter colour
+    // Sheen the visible rows in the filter colour. Each row gets a tiny
+    // stagger so the highlight rolls down the table like a single light
+    // source crossing all the cards in turn.
     const rgba=_filterColors[status];
     if(rgba){
-      document.querySelectorAll('#tbody tr').forEach(tr=>{
+      const rows=document.querySelectorAll('#tbody tr');
+      rows.forEach((tr,i)=>{
         tr.style.setProperty('--rf',rgba);
+        tr.style.animationDelay=(i*40)+'ms';
         tr.classList.remove('row-flash');
-        // Force reflow so the animation restarts even on rapid clicks
         void tr.offsetWidth;
         tr.classList.add('row-flash');
-        tr.addEventListener('animationend',()=>tr.classList.remove('row-flash'),{once:true});
+        tr.addEventListener('animationend',()=>{
+          tr.classList.remove('row-flash');
+          tr.style.animationDelay='';
+        },{once:true});
       });
     }
   });
