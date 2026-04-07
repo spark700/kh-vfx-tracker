@@ -931,7 +931,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0038</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0039</div>
 
 <script>
 const USERS = {
@@ -1286,6 +1286,7 @@ const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
 const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5c29tY3J3amtzenNpemdrZ2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI2MTMsImV4cCI6MjA5MDc3ODYxM30.Wmz0fog7GGkqcVX8kGXR54DxsiKekr4ksHha24Odohs";
 const SUPA_HEADERS={"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json","Prefer":"return=minimal"};
 let _saving=false,_pendingSave=false;
+let _lastKnownUpdatedAt=null;
 function _tryAuthLink(){
   const params=new URLSearchParams(window.location.search);
   const raw=params.get('auth');
@@ -1366,12 +1367,37 @@ function saveState(s){
 
 async function _pushRemote(s){
   try{
-    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq.main",{
+    // Optimistic locking: only update if server timestamp matches what we last saw.
+    // Prevents stale tabs from overwriting newer state (last-write-wins bug).
+    let url=SUPA_URL+"/rest/v1/tracker_state?id=eq.main";
+    if(_lastKnownUpdatedAt){
+      url+="&updated_at=eq."+encodeURIComponent(_lastKnownUpdatedAt);
+    }
+    const r=await fetch(url,{
       method:"PATCH",
-      headers:SUPA_HEADERS,
+      headers:{...SUPA_HEADERS,"Prefer":"return=representation"},
       body:JSON.stringify({data:s,updated_at:new Date().toISOString()})
     });
     if(!r.ok){const t=await r.text();console.error("Supabase PATCH error:",t);throw new Error(t);}
+    const updatedRows=await r.json();
+    // Conflict detection: filter didn't match → empty array → server has newer state
+    if(_lastKnownUpdatedAt&&Array.isArray(updatedRows)&&updatedRows.length===0){
+      console.warn("[_pushRemote] CONFLICT — server changed since last sync, re-pulling");
+      const nc=document.getElementById("saveNotice");
+      if(nc){nc.textContent="Conflict — re-syncing...";nc.style.background="#d29922";}
+      await _pullRemote();
+      try{runMigrations();render();}catch(e){}
+      if(nc){nc.textContent="⚠ Conflict: re-do your last action";nc.style.background="#d29922";
+        setTimeout(()=>{nc.classList.remove("show");nc.style.background="";},6000);}
+      if(typeof _showAlert==='function'){
+        _showAlert('Sync conflict','Another device saved changes while you were editing.<br><br>The page has been refreshed with the latest data. Your last action was <b>not saved</b> — please redo it.');
+      }
+      return;
+    }
+    // Success: update tracker from server response
+    if(Array.isArray(updatedRows)&&updatedRows[0]?.updated_at){
+      _lastKnownUpdatedAt=updatedRows[0].updated_at;
+    }
     const n=document.getElementById("saveNotice");
     n.textContent="Saved";n.style.background="#1f6feb";
     setTimeout(()=>n.classList.remove("show"),1200);
@@ -1385,21 +1411,25 @@ async function _pushRemote(s){
 
 async function _pullRemote(){
   try{
-    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq.main&select=data",{
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq.main&select=data,updated_at",{
       headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}
     });
     if(!r.ok)return false;
     const rows=await r.json();
-    if(rows.length&&rows[0].data&&Object.keys(rows[0].data).length){
-      const remote=rows[0].data;
-      // Only update if data actually changed
-      if(JSON.stringify(remote)===JSON.stringify(state))return false;
-      // Merge readState — keep local user's readState
-      const localRead=state.__readState&&currentUser?state.__readState[currentUser.id]:null;
-      state=remote;
-      if(localRead&&currentUser){if(!state.__readState)state.__readState={};state.__readState[currentUser.id]=localRead;}
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-      return true;
+    if(rows.length){
+      // Always track latest server timestamp for optimistic locking
+      if(rows[0].updated_at)_lastKnownUpdatedAt=rows[0].updated_at;
+      if(rows[0].data&&Object.keys(rows[0].data).length){
+        const remote=rows[0].data;
+        // Only update if data actually changed
+        if(JSON.stringify(remote)===JSON.stringify(state))return false;
+        // Merge readState — keep local user's readState
+        const localRead=state.__readState&&currentUser?state.__readState[currentUser.id]:null;
+        state=remote;
+        if(localRead&&currentUser){if(!state.__readState)state.__readState={};state.__readState[currentUser.id]=localRead;}
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+        return true;
+      }
     }
   }catch(e){console.error("Pull failed:",e);}
   return false;
@@ -1421,7 +1451,10 @@ function _initRealtime(){
       try{
         const msg=JSON.parse(ev.data);
         if(msg.event==="postgres_changes"&&msg.payload?.data?.record?.data){
-          const remote=msg.payload.data.record.data;
+          const record=msg.payload.data.record;
+          const remote=record.data;
+          // Track latest server timestamp from realtime push (for optimistic locking)
+          if(record.updated_at)_lastKnownUpdatedAt=record.updated_at;
           if(JSON.stringify(remote)!==JSON.stringify(state)){
             state=remote;
             localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
@@ -2129,6 +2162,7 @@ async function _pubHandleEntries(folder,entries){
 }
 
 function openUserManager(){
+  if(!isAdmin())return;
   const ov=document.createElement("div");
   ov.className="admin-modal-overlay";ov.id="artistManagerOverlay";
   ov.onclick=(e)=>{if(e.target===ov)closeUserManager();};
@@ -2459,10 +2493,19 @@ function setUserColor(id,color){
 }
 function _generateKey(len){
   const chars="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let r="";for(let i=0;i<len;i++)r+=chars[Math.floor(Math.random()*chars.length)];
+  // Rejection sampling to avoid modulo bias (256 % 54 != 0)
+  const max=Math.floor(256/chars.length)*chars.length;
+  const buf=new Uint8Array(Math.max(len*2,16));
+  let r="",i=buf.length;
+  while(r.length<len){
+    if(i>=buf.length){crypto.getRandomValues(buf);i=0;}
+    const b=buf[i++];
+    if(b<max)r+=chars[b%chars.length];
+  }
   return r;
 }
 async function addUser(){
+  if(!isAdmin())return;
   const inp=document.getElementById("newUserName");
   const tgInp=document.getElementById("newUserTelegram");
   const name=inp?.value.trim();
@@ -2493,6 +2536,7 @@ async function addUser(){
   render();
 }
 async function regenKey(id){
+  if(!isAdmin())return;
   if(!USERS[id])return;
   const key=_generateKey(12);
   const hash=await sha256(key);
@@ -2507,6 +2551,7 @@ async function regenKey(id){
   document.getElementById("userList").innerHTML=_renderUserList();
 }
 function changeUserRole(id,role){
+  if(!isAdmin())return;
   if(!USERS[id])return;
   USERS[id].role=role;
   if(!state.__users)state.__users={};
@@ -2531,6 +2576,7 @@ function copyAuthLink(id){
   const orig=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=orig,800);
 }
 function removeUser(id){
+  if(!isAdmin())return;
   if(id===currentUser?.id){alert("Cannot remove yourself");return;}
   if(!confirm("Remove "+USERS[id]?.display+"?"))return;
   delete USERS[id];
@@ -5047,7 +5093,7 @@ document.addEventListener("keydown",e=>{
   }
 });
 
-function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function trunc(s,n){return !s?"":s.length>n?s.substring(0,n)+"...":s;}
 
 // --- SHOT DETAIL ---
@@ -7238,6 +7284,7 @@ function _validateVersionFile(shotId,filename){
 }
 
 async function uploadVersion(shotId,input){
+  if(!_canUpload(shotId)){input.value="";return;}
   const file=input.files[0];
   if(!file)return;
   input.value="";
