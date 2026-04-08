@@ -598,6 +598,7 @@
   .status-select.s-review { border-color: #58a6ff; color: #58a6ff; }
   .status-select.s-done { border-color: #3fb950; color: #3fb950; }
   .status-select.s-skip { border-color: #484f58; color: #484f58; }
+  .status-select.s-delivered { border-color: #6e7681; color: #6e7681; }
   .assign-nikita { border-color: #58a6ff; color: #58a6ff; }
   .assign-igor { border-color: #3fb950; color: #3fb950; }
   .note-cell { cursor: pointer; padding: 4px 4px 4px 6px; border-radius: 6px; font-size: 9px; min-width: 180px; max-width: 300px; background: #0d1117; border: 1px solid #21262d; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; box-sizing: border-box; }
@@ -1025,6 +1026,7 @@
     <div class="stat-card clickable" data-filter="progress" style="--card-color:#d29922"><div class="num yellow" id="stat-progress">0</div><div class="label">IN PROGRESS</div></div>
     <div class="stat-card clickable" data-filter="review" style="--card-color:#58a6ff"><div class="num blue" id="stat-review">0</div><div class="label">REVIEW</div></div>
     <div class="stat-card clickable" data-filter="done" style="--card-color:#3fb950"><div class="num green" id="stat-done">0</div><div class="label">DONE</div></div>
+    <div class="stat-card clickable" data-filter="delivered" style="--card-color:#6e7681"><div class="num" id="stat-delivered" style="color:#6e7681">0</div><div class="label">DELIVERED</div></div>
     <div class="stat-card clickable" data-filter="skip" style="--card-color:#8b949e"><div class="num grey" id="stat-skip">0</div><div class="label">SKIP</div></div>
   </div>
   <div id="artistStats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
@@ -1048,7 +1050,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0114</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0115</div>
 
 <script>
 const USERS = {
@@ -1236,6 +1238,9 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   if(dsb)dsb.style.display=isAdmin()?'block':'none';
   const anb=document.getElementById("analyticsBtn");
   if(anb)anb.style.display=isGuest()?'none':'block';
+  // Sync 'delivered' status with file-based detection on initial load.
+  // Runs once after state is loaded; subsequent triggers happen via _pullRemote.
+  try{setTimeout(()=>{try{_autoPromoteDelivered();}catch(e){}},250);}catch(e){}
   render();
   _handleChatDeepLink();
   _handlePlayerDeepLink();
@@ -1699,6 +1704,8 @@ function _doneKind(shotId){
   const sh=state[shotId]||{};
   // getStatus() default-to-todo semantics — never trust raw sh.status here.
   const status=(typeof getStatus==="function")?getStatus(shotId):(sh.status||"todo");
+  // status==='delivered' is the strongest "done" signal — short-circuit.
+  if(status==="delivered")return "delivered";
   const finalArr=(sh.files&&sh.files['versions/final'])||[];
   const hasFinal=finalArr.length>0;
   const isDone=status==="done";
@@ -3018,6 +3025,10 @@ async function _pullRemote(){
         state=remote;
         if(localRead&&currentUser){if(!state.__readState)state.__readState={};state.__readState[currentUser.id]=localRead;}
         localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+        // After remote sync: check if any shots were just delivered (client downloaded
+        // their final files via Telegram bot share). Promote status accordingly.
+        // Deferred so other listeners get the new state first.
+        try{setTimeout(()=>{try{_autoPromoteDelivered();}catch(e){}},150);}catch(e){}
         return true;
       }
     }
@@ -3210,7 +3221,7 @@ function _labelFor(field,val){
     return a?a.display:val;
   }
   if(field==="status"){
-    const m={todo:"TODO",progress:"In Progress",review:"Review",done:"Done",skip:"Skip"};
+    const m={todo:"TODO",progress:"In Progress",review:"Review",done:"Done",delivered:"Delivered",skip:"Skip"};
     return m[val]||val;
   }
   return val;
@@ -3742,6 +3753,65 @@ function _artistTabFilter(artistId,status,clickedEl){
 }
 
 function getStatus(id){return state[id]?.status||"todo";}
+
+// === Delivered status auto-detection ===
+// A shot is "delivered" once at least one non-anonymous user has marked
+// every file in versions/final as 'completed' in __downloadTracking.
+// This mirrors the prod _isDelivered closure inside openDoneShots, hoisted
+// to a top-level helper so it can be reused for status auto-promotion.
+function _isClientDelivered(shotId){
+  const sh=state[shotId]||{};
+  const finalArr=(sh.files&&sh.files['versions/final'])||[];
+  if(!finalArr.length)return false;
+  const finalNames=finalArr.map(f=>shotId+"_FINAL/"+f.name);
+  const shares=state.__downloadShares||{};
+  const tracking=state.__downloadTracking||{};
+  for(const token of Object.keys(shares)){
+    const share=shares[token];
+    if(!share||!Array.isArray(share.ids)||!share.ids.includes(shotId))continue;
+    const node=tracking[token];
+    if(!node||!node.users)continue;
+    for(const uid of Object.keys(node.users)){
+      if(uid==="_anon")continue;
+      const uf=node.users[uid].files||{};
+      const allDone=finalNames.every(fn=>uf[fn]&&uf[fn].state==="completed");
+      if(allDone)return true;
+    }
+  }
+  return false;
+}
+
+// Walk all shots and sync their status with the file-based delivery detection.
+// - If client downloaded all final files AND status != "delivered" → set delivered
+// - If status == "delivered" but no longer detected as such → revert to "done"
+// Saves state ONCE at the end if any changes were made (single sync round-trip).
+// Returns number of changes.
+function _autoPromoteDelivered(){
+  if(!state||!Array.isArray(state.__tasks))return 0;
+  let changed=0;
+  for(const t of state.__tasks){
+    if(!t||!t.id)continue;
+    const sid=t.id;
+    const sh=state[sid];
+    if(!sh)continue;
+    const isDel=_isClientDelivered(sid);
+    const cur=sh.status;
+    if(isDel&&cur!=="delivered"){
+      sh.status="delivered";
+      changed++;
+    }else if(!isDel&&cur==="delivered"){
+      // Reverted: file or download tracking removed → fall back to "done"
+      sh.status="done";
+      changed++;
+    }
+  }
+  if(changed>0){
+    try{saveState(state);}catch(e){console.warn("[delivered] saveState failed",e);}
+    try{if(typeof updateStats==="function")updateStats();}catch(e){}
+    try{if(typeof render==="function")render();}catch(e){}
+  }
+  return changed;
+}
 let _prioSort=false;
 const _prioOrder={"red":0,"yellow":1,"green":2,"":3};
 function togglePrioSort(){
@@ -5559,7 +5629,7 @@ function chatPreview(id){
 }
 
 function updateStats(){
-  let c={todo:0,progress:0,review:0,done:0,skip:0};
+  let c={todo:0,progress:0,review:0,done:0,delivered:0,skip:0};
   const ac={};
   let unassignedCount=0;
   // Hidden shots never count toward the top counters or per-artist stats
@@ -5567,9 +5637,10 @@ function updateStats(){
   // without losing data.
   const visible=TASKS.filter(t=>!state[t.id]?.hidden);
   visible.forEach(t=>{
-    const st=getStatus(t.id);c[st]++;
+    const st=getStatus(t.id);
+    if(c[st]!==undefined)c[st]++;
     const a=getAssignee(t.id);
-    if(a){if(!ac[a])ac[a]={total:0,done:0,todo:0,progress:0,review:0};ac[a].total++;ac[a][st]=(ac[a][st]||0)+1;}
+    if(a){if(!ac[a])ac[a]={total:0,done:0,todo:0,progress:0,review:0,delivered:0};ac[a].total++;ac[a][st]=(ac[a][st]||0)+1;}
     else {unassignedCount++;}
   });
   const total=visible.length;
@@ -5578,6 +5649,7 @@ function updateStats(){
   document.getElementById("stat-progress").textContent=c.progress;
   document.getElementById("stat-review").textContent=c.review;
   document.getElementById("stat-done").textContent=c.done;
+  const delEl=document.getElementById("stat-delivered");if(delEl)delEl.textContent=c.delivered;
   const skipEl=document.getElementById("stat-skip");if(skipEl)skipEl.textContent=c.skip;
   // Sync active class on status cards
   document.querySelectorAll("#statusStats .stat-card").forEach(card=>{
@@ -10068,6 +10140,7 @@ function _buildRow(r){
     <td><select class="status-select ${stClass}" onchange="setStatus('${r.id}',this.value,this)" ${editSt?"":"disabled"}>
       <option value="todo" ${st==="todo"?"selected":""}>TODO</option><option value="progress" ${st==="progress"?"selected":""}>In Progress</option>
       <option value="review" ${st==="review"?"selected":""}>Review</option><option value="done" ${st==="done"?"selected":""}>Done</option>
+      ${(isAdmin()||st==="delivered")?`<option value="delivered" ${st==="delivered"?"selected":""}>Delivered</option>`:""}
       <option value="skip" ${st==="skip"?"selected":""}>Skip</option></select></td>
     <td class="desc-cell admin-col${canEditAdminNote()&&isEditMode()?' editable':''}" ${canEditAdminNote()&&isEditMode()?`onclick="startEditAdmin('${r.id}',this,event)"`:''} data-tid="${r.id}">${an||'<span style="color:#484f58">...</span>'}</td>
     <td style="vertical-align:top;padding-top:32px"><div class="note-cell${cp.text?' has-text':''}${hasUnread(r.id)?' unread':' read'}" onclick="openNote('${r.id}','chat')"><div class="chat-preview-fade">${cp.lines.length?cp.lines.map(l=>`<div class="cp-bubble cp-${l.role}">${esc(l.text)}</div>`).join(''):'<span style="color:#484f58;font-size:11px">...</span>'}</div></div></td>
@@ -10134,7 +10207,20 @@ function saveAdmin(tid,ta){
   render();
 }
 
-function setStatus(id,val,el){if(!canEditStatus(id))return;if(!state[id])state[id]={};state[id].status=val;saveState(state);el.className="status-select s-"+val;updateStats();}
+function setStatus(id,val,el){
+  if(!canEditStatus(id))return;
+  // "delivered" can only be set by admin (or by the auto-promote system).
+  // Reject + revert dropdown if a non-admin somehow picked it.
+  if(val==="delivered"&&!isAdmin()){
+    if(el)el.value=getStatus(id);
+    return;
+  }
+  if(!state[id])state[id]={};
+  state[id].status=val;
+  saveState(state);
+  if(el)el.className="status-select s-"+val;
+  updateStats();
+}
 function setAssignee(id,val){if(!isEditMode()||!canAssign())return;if(!state[id])state[id]={};state[id].assignee=val;saveState(state);render();}
 function sortTable(col){if(sortCol===col)sortAsc=!sortAsc;else{sortCol=col;sortAsc=true;}_updateSortArrows();render();}
 const _arrowCols=new Set([1,4,5]); // ID, TC In, TC Out
