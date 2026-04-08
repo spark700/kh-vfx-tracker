@@ -178,19 +178,41 @@
   }
   .all-stack .stack-front { position: relative; z-index: 2; transition: translate 0.3s ease, rotate 0.3s ease, box-shadow 0.3s; }
   .all-stack .stack-back  { position: absolute; inset: 0; z-index: 1; translate: -9px -7px; rotate: -5deg; transition: translate 0.3s ease, rotate 0.3s ease, box-shadow 0.3s; transform-origin: bottom right; }
-  .all-stack:hover [data-artist="all"]        { translate: -45px -30px; rotate: -6deg; box-shadow: 0 8px 22px rgba(0,0,0,0.6); animation: cardFloatA 2.6s ease-in-out 0.35s infinite; }
-  .all-stack:hover [data-artist="unassigned"] { translate: 45px -30px;  rotate: 6deg;  box-shadow: 0 8px 22px rgba(0,0,0,0.6); animation: cardFloatB 2.4s ease-in-out 0.45s infinite; }
+  .all-stack:hover [data-artist="all"]        { translate: -45px -30px; rotate: -6deg; box-shadow: 0 8px 22px rgba(0,0,0,0.6); animation: cardFloatA 3.1s ease-in-out 0.32s infinite; }
+  .all-stack:hover [data-artist="unassigned"] { translate: 45px -30px;  rotate: 6deg;  box-shadow: 0 8px 22px rgba(0,0,0,0.6); animation: cardFloatB 2.3s ease-in-out 0.78s infinite; }
+  /* Direct hover on a spread card swaps its float for a snappier
+     "lift" animation — more amplitude, scale-up, brighter shadow.
+     The other card keeps drifting in the background so the focused
+     one stands out clearly. */
+  .all-stack:hover [data-artist="all"]:hover        { animation: cardLiftA 1.4s ease-in-out infinite; box-shadow: 0 14px 32px rgba(88,166,255,0.35); z-index: 4; }
+  .all-stack:hover [data-artist="unassigned"]:hover { animation: cardLiftB 1.4s ease-in-out infinite; box-shadow: 0 14px 32px rgba(139,148,158,0.35); z-index: 4; }
   .all-stack:hover { z-index: 50; }
-  /* Subtle "alive" idle motion while the cards are in their spread
-     position. Uses transform (separate from translate/rotate above)
-     so the float doesn't fight the spread offsets. */
+  /* Two desynced floats — different durations, different phases,
+     different rotation amplitudes. They drift apart over time which
+     is what "asynchronously" looks like. */
   @keyframes cardFloatA {
-    0%, 100% { transform: translateY(0)    rotate(0deg);  }
-    50%      { transform: translateY(-4px) rotate(0.6deg); }
+    0%   { transform: translateY(0)    rotate(0deg);  }
+    25%  { transform: translateY(-3px) rotate(0.7deg); }
+    55%  { transform: translateY(-5px) rotate(0.2deg); }
+    80%  { transform: translateY(-2px) rotate(-0.3deg); }
+    100% { transform: translateY(0)    rotate(0deg); }
   }
   @keyframes cardFloatB {
-    0%, 100% { transform: translateY(0)    rotate(0deg);  }
-    50%      { transform: translateY(-3px) rotate(-0.6deg); }
+    0%   { transform: translateY(0)    rotate(0deg);  }
+    30%  { transform: translateY(-2px) rotate(-0.5deg); }
+    60%  { transform: translateY(-4px) rotate(-0.9deg); }
+    85%  { transform: translateY(-1px) rotate(0.4deg); }
+    100% { transform: translateY(0)    rotate(0deg); }
+  }
+  /* Lift keyframes — used while the cursor is directly over a card.
+     Bigger Y offset, scale-up. */
+  @keyframes cardLiftA {
+    0%, 100% { transform: translateY(-6px) rotate(-1deg) scale(1.08); }
+    50%      { transform: translateY(-9px) rotate(1deg)  scale(1.10); }
+  }
+  @keyframes cardLiftB {
+    0%, 100% { transform: translateY(-6px) rotate(1deg)  scale(1.08); }
+    50%      { transform: translateY(-9px) rotate(-1deg) scale(1.10); }
   }
   .artist-card { background: #161b22; border-radius: 8px; padding: 6px 12px; text-align: center; min-width: 80px; transition: .15s; cursor: pointer; user-select: none; border: 1px solid #30363d; }
   .artist-card:hover { border-color: #58a6ff !important; }
@@ -1019,7 +1041,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0092</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0093</div>
 
 <script>
 const USERS = {
