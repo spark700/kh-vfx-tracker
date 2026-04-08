@@ -1045,7 +1045,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0099</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0100</div>
 
 <script>
 const USERS = {
@@ -4179,7 +4179,7 @@ function updateStats(){
         ${doneBadge}
         <div style="font-size:11px;color:#8b949e;font-weight:600">${esc(a.display)}</div>
         <div style="font-size:20px;font-weight:700;color:${col};line-height:1.1;margin-top:6px">${active}</div>
-        <div style="font-size:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:-5px;position:relative;pointer-events:none"><span style="color:#a13730;display:inline-flex;align-items:center;gap:2px">${s.todo}<svg width="7" height="7" viewBox="0 0 12 12" style="display:block;flex-shrink:0;margin-bottom:1px"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#a13730" stroke-width="1.8" stroke-dasharray="1.6 1.6"/></svg></span><span style="color:#896318">◐&nbsp;${s.progress}</span></div>
+        <div style="font-size:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:-5px;position:relative;pointer-events:none"><span style="color:#a13730;display:inline-flex;align-items:center;gap:3px">${s.todo}<svg width="9" height="9" viewBox="0 0 12 12" style="display:block;flex-shrink:0"><circle cx="6" cy="6" r="5" fill="none" stroke="#a13730" stroke-width="1.6" stroke-dasharray="1.7 1.7"/></svg></span><span style="color:#896318;display:inline-flex;align-items:center;gap:3px"><svg width="9" height="9" viewBox="0 0 12 12" style="display:block;flex-shrink:0"><circle cx="6" cy="6" r="5" fill="none" stroke="#896318" stroke-width="1.6"/><path d="M6 1 A5 5 0 0 1 6 11 Z" fill="#896318"/></svg>${s.progress}</span></div>
         ${reviewBadge}
       </div>`;
     });
