@@ -877,9 +877,9 @@
       <span class="shot-header-desc" id="doneShotsLegend" style="font-size:11px"><span style="color:#f85149">● done, no file</span> &nbsp; <span style="color:#d29922">● file, status≠done</span> &nbsp; <span style="color:#3fb950">● done+file</span> &nbsp; <span style="color:#6e7681">● delivered to client</span></span>
       <button class="shot-close" onclick="closeDoneShots()">&times;</button>
     </div>
-    <div style="display:flex;max-height:70vh;border-top:1px solid #21262d">
-      <div id="doneShotsTracker" style="width:280px;border-right:1px solid #21262d;overflow-y:auto;padding:12px;background:#0d1117"></div>
-      <div id="doneShotsBody" style="padding:16px;flex:1;overflow:auto"></div>
+    <div style="display:flex;flex:1;min-height:0;border-top:1px solid #21262d">
+      <div id="doneShotsTracker" style="width:280px;border-right:1px solid #21262d;overflow-y:auto;padding:12px;background:#0d1117;min-height:0"></div>
+      <div id="doneShotsBody" style="padding:16px;flex:1;overflow:auto;min-height:0"></div>
     </div>
   </div>
 </div>
@@ -1042,7 +1042,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0111</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0112</div>
 
 <script>
 const USERS = {
