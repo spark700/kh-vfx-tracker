@@ -1045,7 +1045,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0094</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0095</div>
 
 <script>
 const USERS = {
@@ -2190,6 +2190,7 @@ document.getElementById("statusStats").addEventListener("click",e=>{
   if(!card)return;
   currentFilter=card.dataset.filter;
   render();
+  _pulseDoneReview();
 });
 // Artist stat card click → filter (delegated since cards re-render on each updateStats)
 document.getElementById("artistStats").addEventListener("click",e=>{
@@ -2204,7 +2205,30 @@ document.getElementById("artistStats").addEventListener("click",e=>{
   // a different artist must not silently drop the REVIEW / DONE / TODO
   // filter that was in effect.
   render();
+  _pulseDoneReview();
 });
+// Sheen helper: at every filter interaction the highlight runs over
+// rows whose status is done OR review only — green for done rows, blue
+// for review rows. Other rows stay calm.
+function _pulseDoneReview(){
+  requestAnimationFrame(()=>{
+    const rows=document.querySelectorAll('#tbody tr[data-row-status="done"], #tbody tr[data-row-status="review"]');
+    rows.forEach((tr,i)=>{
+      const status=tr.dataset.rowStatus;
+      const rgba=status==='done'?_filterColors.done:_filterColors.review;
+      tr.style.setProperty('--rf',rgba);
+      const jitter=i===0?0:Math.round(i*8+Math.random()*70);
+      tr.style.animationDelay=jitter+'ms';
+      tr.classList.remove('row-flash');
+      void tr.offsetWidth;
+      tr.classList.add('row-flash');
+      tr.addEventListener('animationend',()=>{
+        tr.classList.remove('row-flash');
+        tr.style.animationDelay='';
+      },{once:true});
+    });
+  });
+}
 // Top/bottom tab on an artist card → filter by artist + status at once.
 // Pulses the clicked tab and flashes every visible row in the filter
 // colour so the user gets clear visual feedback.
@@ -8509,6 +8533,7 @@ function render(){
       const prio=getPriority(r.id);const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
       if(cells[0]){const box=cells[0].querySelector('.prio-tag');if(box)box.className=prioTagClass;}
       tr.className=prio?'row-prio-'+prio:'';
+      tr.dataset.rowStatus=st;
       if(cells[3]&&!cells[3].querySelector('.si-edit'))cells[3].innerHTML=_renderShotInfo(r.id);
       if(cells[4]){const rc=getCat(r.id);cells[4].innerHTML=isAdmin()&&isEditMode()?_catTag(r.id,rc):_catTagHtml(rc);}
       if(cells[7]){const sel=cells[7].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
@@ -8532,7 +8557,7 @@ function _buildRow(r){
   const _ep=canEditPrio()&&isEditMode();
   const prioClick=_ep?`onclick="event.stopPropagation();openPrioDropdown('${r.id}',this)"`:'';
   const prioStyle=_ep?'':'style="cursor:default"';
-  return `<tr class="${rowPrioClass}">
+  return `<tr class="${rowPrioClass}" data-row-status="${st}">
     <td><div class="${prioTagClass}" ${prioClick} ${prioStyle}></div></td>
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
