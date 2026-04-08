@@ -1042,7 +1042,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0104</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0105</div>
 
 <script>
 const USERS = {
@@ -1744,13 +1744,13 @@ function _categoryLabel(catKey){
 }
 
 const _DONE_KIND_META={
-  delivered:     {label:"Скачано клиентом",  color:"#6e7681", priority:5},
-  done_with_file:{label:"Готово + файл",     color:"#3fb950", priority:4},
-  file_no_done:  {label:"Файл без статуса",  color:"#d29922", priority:3},
-  done_no_file:  {label:"Готово без файла",  color:"#f85149", priority:2},
-  in_progress:   {label:"В работе",          color:"#58a6ff", priority:1},
-  todo:          {label:"Не начато",         color:"#8b949e", priority:0},
-  skip:          {label:"Skip",              color:"#484f58", priority:-1},
+  delivered:     {label:"Delivered",      color:"#6e7681", priority:5},
+  done_with_file:{label:"Done + file",    color:"#3fb950", priority:4},
+  file_no_done:  {label:"File, no done",  color:"#d29922", priority:3},
+  done_no_file:  {label:"Done, no file",  color:"#f85149", priority:2},
+  in_progress:   {label:"In progress",    color:"#58a6ff", priority:1},
+  todo:          {label:"Todo",           color:"#8b949e", priority:0},
+  skip:          {label:"Skip",           color:"#484f58", priority:-1},
 };
 
 // Canonical shot list — iterate __tasks (matches prod openDoneShots logic).
@@ -2303,15 +2303,15 @@ async function openAnalytics(){
 
     // Summary cards
     html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">';
-    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Типичный шот</div><div style="font-size:24px;font-weight:600;color:#3fb950;margin-top:4px">'+_fmtDays(agg.median)+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">половина шотов укладывается</div></div>';
-    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Большинство шотов</div><div style="font-size:24px;font-weight:600;color:#d29922;margin-top:4px">'+_fmtDays(agg.p85)+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">85% укладываются в это время</div></div>';
-    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Долгие шоты</div><div style="font-size:24px;font-weight:600;color:#f85149;margin-top:4px">'+_fmtDays(agg.p95)+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">5% занимают дольше</div></div>';
-    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Данные на основе</div><div style="font-size:24px;font-weight:600;color:#58a6ff;margin-top:4px">'+agg.closed_count+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">завершённых шотов</div></div>';
+    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Median cycle</div><div style="font-size:24px;font-weight:600;color:#3fb950;margin-top:4px">'+_fmtDays(agg.median)+'</div></div>';
+    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">P85</div><div style="font-size:24px;font-weight:600;color:#d29922;margin-top:4px">'+_fmtDays(agg.p85)+'</div></div>';
+    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">P95</div><div style="font-size:24px;font-weight:600;color:#f85149;margin-top:4px">'+_fmtDays(agg.p95)+'</div></div>';
+    html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Effective N (Kish)</div><div style="font-size:24px;font-weight:600;color:#58a6ff;margin-top:4px">'+agg.eff_n.toFixed(1)+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">of '+agg.closed_count+' closed</div></div>';
     html+='</div>';
 
     // Coverage line
     const inScopeTotal=agg.closed_count+agg.open_count+agg.no_data_count;
-    html+='<div style="color:#8b949e;font-size:13px;margin-bottom:16px"><b style="color:#3fb950">'+agg.closed_count+' завершено</b> · <b style="color:#d29922">'+agg.open_count+' в работе</b> · <b style="color:#f85149">'+agg.no_data_count+' без данных</b> · <b style="color:#484f58">'+agg.skipped_count+' skip (не в зачёт)</b> · всего '+inScopeTotal+' в работе</div>';
+    html+='<div style="color:#8b949e;font-size:13px;margin-bottom:16px">Coverage: <b style="color:#3fb950">'+agg.closed_count+' closed</b> · <b style="color:#d29922">'+agg.open_count+' open (right-censored)</b> · <b style="color:#f85149">'+agg.no_data_count+' no data</b> · <b style="color:#484f58">'+agg.skipped_count+' skipped (excluded)</b> · '+inScopeTotal+' in scope · '+events.length+' events total</div>';
 
     // Canonical shot list (used by both forecast and pipeline-state breakdown below)
     const allShotIds=_allShotIds();
@@ -2332,23 +2332,23 @@ async function openAnalytics(){
       const centDate=_addDays(now,tpFcst.central_days);
       const pessDate=_addDays(now,tpFcst.pessimistic_days);
       html+='<div style="background:linear-gradient(135deg,#0d1117,#1a1f29);border:2px solid #3fb950;border-radius:10px;padding:18px 20px;margin-bottom:14px">';
-      html+='<h3 style="margin:0 0 4px;font-size:15px;color:#3fb950">🎯 Когда закроем проект</h3>';
-      html+='<p style="margin:0 0 14px;color:#8b949e;font-size:11px">На основе реальной скорости команды за последние дни — сколько шотов фактически закрывается в день, делённое на остаток.</p>';
+      html+='<h3 style="margin:0 0 4px;font-size:15px;color:#3fb950">🎯 Project completion ETA — Throughput-based (Little\'s Law)</h3>';
+      html+='<p style="margin:0 0 14px;color:#8b949e;font-size:11px">Based on REAL team velocity from recent done milestones — bypasses per-shot work estimates entirely.</p>';
       html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">';
-      html+='<div style="background:#161b22;border:1px solid #3fb950;border-radius:8px;padding:14px"><div style="color:#3fb950;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Если темп сохранится</div><div style="font-size:26px;font-weight:700;color:#e6edf3;margin-top:6px">'+_fmtDate(optDate)+'</div><div style="color:#8b949e;font-size:11px;margin-top:2px">через '+_fmtDays(tpFcst.optimistic_days)+'</div></div>';
-      html+='<div style="background:#161b22;border:1px solid #58a6ff;border-radius:8px;padding:14px"><div style="color:#58a6ff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Реалистично</div><div style="font-size:26px;font-weight:700;color:#e6edf3;margin-top:6px">'+_fmtDate(centDate)+'</div><div style="color:#8b949e;font-size:11px;margin-top:2px">через '+_fmtDays(tpFcst.central_days)+'</div></div>';
-      html+='<div style="background:#161b22;border:1px solid #d29922;border-radius:8px;padding:14px"><div style="color:#d29922;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Если темп упадёт</div><div style="font-size:26px;font-weight:700;color:#e6edf3;margin-top:6px">'+_fmtDate(pessDate)+'</div><div style="color:#8b949e;font-size:11px;margin-top:2px">через '+_fmtDays(tpFcst.pessimistic_days)+'</div></div>';
+      html+='<div style="background:#161b22;border:1px solid #3fb950;border-radius:8px;padding:14px"><div style="color:#3fb950;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Optimistic (recent peak)</div><div style="font-size:26px;font-weight:700;color:#e6edf3;margin-top:6px">'+_fmtDate(optDate)+'</div><div style="color:#8b949e;font-size:11px;margin-top:2px">in '+_fmtDays(tpFcst.optimistic_days)+'</div></div>';
+      html+='<div style="background:#161b22;border:1px solid #58a6ff;border-radius:8px;padding:14px"><div style="color:#58a6ff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Central ('+esc(tpFcst.used_window)+')</div><div style="font-size:26px;font-weight:700;color:#e6edf3;margin-top:6px">'+_fmtDate(centDate)+'</div><div style="color:#8b949e;font-size:11px;margin-top:2px">in '+_fmtDays(tpFcst.central_days)+'</div></div>';
+      html+='<div style="background:#161b22;border:1px solid #d29922;border-radius:8px;padding:14px"><div style="color:#d29922;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Pessimistic (overall avg)</div><div style="font-size:26px;font-weight:700;color:#e6edf3;margin-top:6px">'+_fmtDate(pessDate)+'</div><div style="color:#8b949e;font-size:11px;margin-top:2px">in '+_fmtDays(tpFcst.pessimistic_days)+'</div></div>';
       html+='</div>';
       // Velocity table
-      html+='<div style="color:#8b949e;font-size:12px;margin-bottom:6px">Скорость команды (закрытых шотов в день):</div>';
+      html+='<div style="color:#8b949e;font-size:12px;margin-bottom:6px">Recent velocity (shots completed per day):</div>';
       html+='<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">';
       for(const w of velWindows){
         const color=w.velocity>0?"#3fb950":"#484f58";
-        html+='<div style="color:#8b949e">за '+w.window_days+'д: <span style="color:'+color+';font-weight:600">'+w.velocity.toFixed(1)+'/день</span> ('+w.shots_in_window+' шотов)</div>';
+        html+='<div style="color:#8b949e">last '+w.window_days+'d: <span style="color:'+color+';font-weight:600">'+w.velocity.toFixed(2)+'/day</span> ('+w.shots_in_window+' shots)</div>';
       }
-      html+='<div style="color:#8b949e">всего: <span style="color:#58a6ff;font-weight:600">'+throughput.velocity.toFixed(1)+'/день</span> ('+throughput.n+' шотов за '+throughput.span_days.toFixed(1)+'д)</div>';
+      html+='<div style="color:#8b949e">overall: <span style="color:#58a6ff;font-weight:600">'+throughput.velocity.toFixed(2)+'/day</span> ('+throughput.n+' shots over '+throughput.span_days.toFixed(1)+'d)</div>';
       html+='</div>';
-      html+='<div style="color:#8b949e;font-size:11px">Осталось: '+activeShots.length+' активных шотов</div>';
+      html+='<div style="color:#8b949e;font-size:11px">Remaining: '+activeShots.length+' active shots ÷ velocity</div>';
       html+='</div>';
     }else{
       html+='<div style="background:#21262d;border:1px solid #d29922;border-radius:8px;padding:14px;margin-bottom:14px;color:#d29922"><b>Throughput forecast unavailable:</b> '+esc((throughput&&throughput.reason)||"insufficient data")+'. Need at least 2 completed shots.</div>';
@@ -2387,7 +2387,7 @@ async function openAnalytics(){
       kindCounts[k].count+=1;
       kindCounts[k].shots.push(sid);
     }
-    html+='<h3 style="font-size:14px;margin:24px 0 8px">По стадиям пайплайна</h3>';
+    html+='<h3 style="font-size:14px;margin:24px 0 8px">Pipeline state (mirrors Done Shots categorization)</h3>';
     html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">';
     const kindOrder=["delivered","done_with_file","file_no_done","done_no_file","in_progress","todo","skip"];
     for(const k of kindOrder){
@@ -2398,7 +2398,7 @@ async function openAnalytics(){
     html+='</div>';
 
     // Throughput chart
-    html+='<h3 style="font-size:14px;margin:24px 0 8px">Скорость по неделям (закрытые шоты)</h3>';
+    html+='<h3 style="font-size:14px;margin:24px 0 8px">Throughput (last 8 weeks of done events)</h3>';
     html+='<div style="display:flex;align-items:flex-end;gap:6px;height:80px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px">';
     for(let w=7;w>=0;w--){
       const c=weekBuckets[w]||0;
@@ -2409,12 +2409,12 @@ async function openAnalytics(){
     html+='</div>';
 
     // Phase breakdown (work / review / delivery from approximated phases)
-    html+='<h3 style="font-size:14px;margin:24px 0 8px">Сколько занимает каждая фаза <span style="color:#484f58;font-weight:normal">— приблизительно (точнее станет когда накопятся live-данные)</span></h3>';
-    html+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:8px;border:1px solid #30363d">Фаза</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Шотов</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Типично</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Долгие</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Самые долгие</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Среднее</th><th style="text-align:left;padding:8px;border:1px solid #30363d">Что это</th></tr></thead><tbody>';
+    html+='<h3 style="font-size:14px;margin:24px 0 8px">Phase breakdown <span style="color:#484f58;font-weight:normal">— per-phase durations from synth approximation (live status events will sharpen this over time)</span></h3>';
+    html+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:8px;border:1px solid #30363d">Phase</th><th style="text-align:right;padding:8px;border:1px solid #30363d">N</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Median</th><th style="text-align:right;padding:8px;border:1px solid #30363d">P85</th><th style="text-align:right;padding:8px;border:1px solid #30363d">P95</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Mean</th><th style="text-align:left;padding:8px;border:1px solid #30363d">What it represents</th></tr></thead><tbody>';
     const phaseRows=[
-      ["работа",  phaseAgg.work,   "#58a6ff", "Артист рисует — от первой активности до последней preview-версии"],
-      ["ревью",phaseAgg.review, "#d29922", "Клиент смотрит — от последней preview до финала (или до получения)"],
-      ["доставка",phaseAgg.delivery,"#3fb950","Финал → клиент скачал (обычно почти мгновенно)"]
+      ["work",  phaseAgg.work,   "#58a6ff", "Active work — artist iterating from first activity to last preview submission"],
+      ["review",phaseAgg.review, "#d29922", "Client review — last preview to final upload (or to delivery if no separate final)"],
+      ["delivery",phaseAgg.delivery,"#3fb950","Delivery — final upload to client download (often near-zero)"]
     ];
     for(const [name,p,color,desc] of phaseRows){
       if(!p){
@@ -2437,8 +2437,8 @@ async function openAnalytics(){
       return thr&&s.days!==null&&s.days>thr;
     }).sort((a,b)=>b.days-a.days);
     if(stuckList.length){
-      html+='<h3 style="font-size:14px;margin:24px 0 8px;color:#d29922">⚠ Зависшие шоты ('+stuckList.length+') — висят в текущем статусе дольше нормы</h3>';
-      html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:6px;border:1px solid #30363d">Шот</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Статус</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Уже висит</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Норма</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Источник</th></tr></thead><tbody>';
+      html+='<h3 style="font-size:14px;margin:24px 0 8px;color:#d29922">⚠ Stuck shots ('+stuckList.length+') — currently sitting in their status longer than 1.5×P85 of historical data</h3>';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:6px;border:1px solid #30363d">Shot</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Status</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Time in status</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Threshold (1.5×P85)</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Source</th></tr></thead><tbody>';
       for(const s of stuckList){
         const thr=stuckThresholds[s.status];
         const ratio=s.days/thr;
@@ -2450,8 +2450,8 @@ async function openAnalytics(){
 
     // Category table with shrinkage
     if(catStats.length){
-      html+='<h3 style="font-size:14px;margin:24px 0 8px">По категориям шотов <span style="color:#484f58;font-weight:normal">— сглаженное среднее защищает от перекосов когда категория маленькая</span></h3>';
-      html+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:8px;border:1px solid #30363d">Категория</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Шотов</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Прямое среднее</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Сглаженное</th></tr></thead><tbody>';
+      html+='<h3 style="font-size:14px;margin:24px 0 8px">Per-category cycle time (with Empirical Bayes shrinkage, k=5)</h3>';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:8px;border:1px solid #30363d">Category</th><th style="text-align:right;padding:8px;border:1px solid #30363d">N</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Empirical mean</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Shrunk mean</th></tr></thead><tbody>';
       for(const cs of catStats){
         const labelCell=esc(cs.label||cs.cat||"—")+(cs.label&&cs.label!==cs.cat?' <span style="color:#484f58">('+esc(cs.cat)+')</span>':'');
         html+='<tr><td style="padding:8px;border:1px solid #30363d">'+labelCell+'</td><td style="padding:8px;border:1px solid #30363d;text-align:right">'+cs.n+'</td><td style="padding:8px;border:1px solid #30363d;text-align:right">'+_fmtDays(cs.emp_mean)+'</td><td style="padding:8px;border:1px solid #30363d;text-align:right;color:#58a6ff">'+_fmtDays(cs.shrunk_mean)+'</td></tr>';
@@ -2460,8 +2460,8 @@ async function openAnalytics(){
     }
 
     // Per-shot detail table
-    html+='<h3 style="font-size:14px;margin:24px 0 8px">Детально по каждому шоту</h3>';
-    html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:6px;border:1px solid #30363d">Шот</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Стадия</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Категория</th><th style="text-align:right;padding:6px;border:1px solid #30363d;color:#58a6ff">Работа</th><th style="text-align:right;padding:6px;border:1px solid #30363d;color:#d29922">Ревью</th><th style="text-align:right;padding:6px;border:1px solid #30363d;color:#3fb950">Доставка</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Всего</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Надёжность</th><th style="text-align:right;padding:6px;border:1px solid #30363d">События</th></tr></thead><tbody>';
+    html+='<h3 style="font-size:14px;margin:24px 0 8px">Per-shot detail (sorted by pipeline state, then cycle desc)</h3>';
+    html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:6px;border:1px solid #30363d">Shot</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Pipeline state</th><th style="text-align:left;padding:6px;border:1px solid #30363d">Category</th><th style="text-align:right;padding:6px;border:1px solid #30363d;color:#58a6ff">Work</th><th style="text-align:right;padding:6px;border:1px solid #30363d;color:#d29922">Review</th><th style="text-align:right;padding:6px;border:1px solid #30363d;color:#3fb950">Delivery</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Total</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Conf</th><th style="text-align:right;padding:6px;border:1px solid #30363d">Events</th></tr></thead><tbody>';
     // Build a lookup: shotId → cycle result
     const cycleByShot={};
     for(const c of cycles)cycleByShot[c.shotId]=c;
@@ -2515,7 +2515,7 @@ async function openAnalytics(){
     html+='</tbody></table>';
 
     // Footnote
-    html+='<p style="font-size:11px;color:#484f58;margin-top:16px">Время цикла = от первой активности до момента «готово» (delivered/final/done). Шоты «в работе» не считаются в перцентилях, но учитываются в прогнозе по скорости команды. Skip-шоты исключены полностью.</p>';
+    html+='<p style="font-size:11px;color:#484f58;margin-top:16px">Cycle time = effective_end − effective_start. Confidence = √(c_start × c_end). Aggregates use confidence² weights (Kish). Open tasks are right-censored and excluded from percentiles. Per-category shrinkage uses Empirical Bayes with k=5.</p>';
 
     ov.querySelector("#anaBody").innerHTML=html;
   }catch(e){
