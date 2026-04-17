@@ -1105,7 +1105,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0125</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0127</div>
 
 <script>
 const USERS = {
@@ -3603,12 +3603,18 @@ async function _pushRemote(s){
 // ═══════════════════════════════════════════════════════════════════════
 function _normalizeRegistry(raw){
   const r=raw||{};
+  // Preserve ANY extra keys on the row (mcpTokens, future additions) —
+  // only coerce the known structural fields into the right shape. Earlier
+  // bug: hard-listing returned fields silently dropped mcpTokens on every
+  // pull, wiping issued tokens after the next push.
   return {
+    ...r,
     __version:typeof r.__version==='number'?r.__version:0,
     projects:Array.isArray(r.projects)?r.projects:[],
     users:(r.users&&typeof r.users==='object')?r.users:{},
     userProjects:(r.userProjects&&typeof r.userProjects==='object')?r.userProjects:{},
-    artists:Array.isArray(r.artists)?r.artists:[]
+    artists:Array.isArray(r.artists)?r.artists:[],
+    mcpTokens:Array.isArray(r.mcpTokens)?r.mcpTokens:[]
   };
 }
 async function _pullRegistry(){
