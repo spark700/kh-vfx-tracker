@@ -149,6 +149,33 @@
   .login-box .guest-btn:hover { background: #161b22; color: #c9d1d9; border-color: #484f58; }
   .login-divider { color: #484f58; font-size: 12px; margin: 6px 0 14px; }
   .login-error { color: #f85149; font-size: 13px; min-height: 20px; }
+  /* ── PROJECT PICKER ───────────────────────────────────────────── */
+  .project-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .project-picker-overlay.hidden { display: none; }
+  .project-picker-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 32px; width: 560px; max-width: 90vw; text-align: center; max-height: 85vh; overflow: auto; }
+  .project-picker-box h2 { color: #f0f6fc; margin: 0 0 4px; font-size: 20px; }
+  .project-picker-box p { color: #8b949e; font-size: 13px; margin: 0 0 20px; }
+  .project-picker-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .project-picker-card { position: relative; background: #0d1117; border: 1px solid #21262d; border-radius: 12px; padding: 16px 12px; cursor: pointer; transition: .15s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .project-picker-card:hover { border-color: var(--pc-color, #58a6ff); transform: translateY(-2px); }
+  .project-picker-card.active { border-color: var(--pc-color, #58a6ff); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pc-color, #58a6ff) 40%, transparent); }
+  .project-picker-tile { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; flex-shrink: 0; background: var(--pc-color, #58a6ff); }
+  .project-picker-name { font-size: 14px; color: #c9d1d9; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .project-picker-meta { font-size: 10px; color: #484f58; text-transform: uppercase; letter-spacing: 0.3px; }
+  .project-picker-logout { background: transparent; border: 1px solid #30363d; color: #8b949e; padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-top: 16px; }
+  .project-picker-logout:hover { color: #f85149; border-color: #f85149; }
+  /* Header project badge */
+  .project-badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 20px; font-size: 12px; color: #c9d1d9; cursor: pointer; margin-right: 10px; transition: .15s; }
+  .project-badge:hover { border-color: var(--pb-color, #58a6ff); }
+  .project-badge.readonly { cursor: default; }
+  .project-badge .pb-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--pb-color, #58a6ff); flex-shrink: 0; }
+  .project-badge .pb-name { font-weight: 600; }
+  .project-badge .pb-switch { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.3px; }
+  /* No-projects screen */
+  .no-projects-box { text-align: center; }
+  .no-projects-box .big-icon { font-size: 48px; margin-bottom: 12px; }
+  .no-projects-box h2 { color: #f0f6fc; margin: 0 0 8px; }
+  .no-projects-box p { color: #8b949e; margin: 0 0 20px; }
   .stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
   .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 20px; min-width: 140px; transition: .15s; }
   .stat-card.clickable { cursor: pointer; user-select: none; border-color: color-mix(in srgb, var(--card-color, #58a6ff) 27%, transparent); }
@@ -873,6 +900,24 @@
   </div>
 </div>
 
+<div class="project-picker-overlay hidden" id="projectPickerOverlay">
+  <div class="project-picker-box" id="projectPickerBox">
+    <h2 id="projectPickerTitle">Pick a project</h2>
+    <p id="projectPickerSubtitle">Choose which project to work on.</p>
+    <div class="project-picker-list" id="projectPickerList"></div>
+    <button class="project-picker-logout" onclick="logout()">Log out</button>
+  </div>
+</div>
+
+<div class="project-picker-overlay hidden" id="noProjectsOverlay">
+  <div class="project-picker-box no-projects-box">
+    <div class="big-icon">🔒</div>
+    <h2>No projects assigned</h2>
+    <p>Ask the admin to grant you access to a project.<br>Once assigned, log out and back in.</p>
+    <button class="project-picker-logout" onclick="logout()">Log out</button>
+  </div>
+</div>
+
 <div class="shot-overlay hidden" id="myFilesOverlay" onclick="if(event.target===this)closeMyFiles()">
   <div class="shot-panel" style="max-width:700px;width:90vw">
     <div class="shot-header">
@@ -1234,9 +1279,63 @@ async function tryLogin(){
 }
 function guestLogin(){currentUser={id:"guest",display:"Guest",role:"guest"};_persistUser("guest");showLoggedIn();}
 document.getElementById("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
-async function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
-  // Pull latest data from remote
-  const pulled=await _pullRemote();if(pulled){runMigrations();if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}}
+// Point the whole app at a different project: updates CURRENT_PROJECT_ID,
+// swaps the cached state, re-subscribes realtime. Does NOT pull remote —
+// caller is responsible for that (usually via _activateProject/showLoggedIn).
+function _setCurrentProject(pid){
+  if(!pid)return;
+  if(pid===CURRENT_PROJECT_ID)return;
+  CURRENT_PROJECT_ID=pid;
+  try{localStorage.setItem(LAST_PROJECT_KEY,pid);}catch(e){}
+  // Reset version trackers — next save bootstraps against the new row
+  _lastKnownVersion=null;
+  _lastKnownUpdatedAt=null;
+  // Swap cached state to the new project's bucket
+  state=loadState();
+  if(!state||typeof state!=='object')state={};
+  if(!state.__tasks)state.__tasks=[];
+  if(!state.__categories)state.__categories={};
+  TASKS=state.__tasks;
+  // Re-point realtime at the new row
+  try{_reconnectRealtime();}catch(e){}
+}
+// Decide what project this user should land on.
+// Returns true if a project is now active (proceed with UI), false if a
+// picker/blocker was shown and showLoggedIn should abort.
+function _resolveProjectSelection(){
+  const projects=getAvailableProjects(currentUser.id);
+  if(projects.length===0){
+    _showNoProjectsScreen();
+    return false;
+  }
+  if(projects.length===1){
+    _setCurrentProject(projects[0].id);
+    return true;
+  }
+  // 2+ projects — prefer last used, else show picker
+  let lastPid=null;try{lastPid=localStorage.getItem(LAST_PROJECT_KEY);}catch(e){}
+  if(lastPid&&projects.some(p=>p.id===lastPid)){
+    _setCurrentProject(lastPid);
+    return true;
+  }
+  _showProjectPicker(projects);
+  return false;
+}
+async function showLoggedIn(){
+  // Step 0 — figure out which project this session belongs to. If the
+  // user has multiple and hasn't picked yet, _resolveProjectSelection
+  // shows a picker and returns false; picker calls showLoggedIn again
+  // once the user selects.
+  if(!_resolveProjectSelection())return;
+  document.getElementById("loginOverlay").classList.add("hidden");
+  document.getElementById("userBadge").style.display="inline-flex";
+  document.getElementById("userName").textContent=currentUser.display;
+  document.getElementById("userDot").className="dot dot-"+currentUser.id;
+  try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
+  // Pull latest data from the selected project's row
+  const pulled=await _pullRemote();if(pulled){runMigrations();}
+  // Refresh registry in case other users / project assignments changed
+  try{await _pullRegistry();}catch(e){}
   document.querySelector("table").classList.toggle("hide-admin",!isAdmin());
   document.getElementById("adminGear").style.display=isAdmin()?'':'none';
   _loadColFilters();
@@ -1248,13 +1347,116 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   if(dsb)dsb.style.display=isAdmin()?'block':'none';
   const anb=document.getElementById("analyticsBtn");
   if(anb)anb.style.display=isGuest()?'none':'block';
-  // Sync 'delivered' status with file-based detection on initial load.
-  // Runs once after state is loaded; subsequent triggers happen via _pullRemote.
+  try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
   try{setTimeout(()=>{try{_autoPromoteDelivered();}catch(e){}},250);}catch(e){}
   render();
   _handleChatDeepLink();
   _handlePlayerDeepLink();
   if(!isGuest())_prefetchTgBotInfo();
+}
+// Switch the live session to a different project. Called from the header
+// switcher and from the picker when a user selects a project.
+async function switchProject(pid){
+  if(!pid||pid===CURRENT_PROJECT_ID){_closeProjectPicker();return;}
+  // Verify the user is actually allowed into this project
+  const projects=getAvailableProjects(currentUser?.id||'');
+  if(!projects.some(p=>p.id===pid)){console.warn('switchProject: not allowed',pid);return;}
+  _setCurrentProject(pid);
+  _closeProjectPicker();
+  try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
+  render();
+  const pulled=await _pullRemote();if(pulled)runMigrations();
+  render();
+  try{if(typeof _initGifs==='function')_initGifs();}catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROJECT PICKER / BADGE UI
+// Central multi-project switcher. Two overlays:
+//   #projectPickerOverlay  — shown post-login for users with 2+ projects
+//   #noProjectsOverlay     — shown if a user has no project assignments
+// Header badge calls _showProjectPicker() to let users switch mid-session.
+// ═══════════════════════════════════════════════════════════════════════
+function _projectInitial(name){return String(name||'').trim().slice(0,2).toUpperCase()||'?';}
+function _projectColor(p){return p?.color||'#58a6ff';}
+function _showProjectPicker(projects){
+  const ov=document.getElementById('projectPickerOverlay');if(!ov)return;
+  ov.classList.remove('hidden');
+  _renderProjectPicker(projects);
+  const title=document.getElementById('projectPickerTitle');
+  const subtitle=document.getElementById('projectPickerSubtitle');
+  if(title&&subtitle){
+    // Post-login view has different copy than the mid-session switcher
+    if(!CURRENT_PROJECT_ID||(projects&&!projects.some(p=>p.id===CURRENT_PROJECT_ID))){
+      title.textContent='Pick a project';
+      subtitle.textContent='Choose which project to work on.';
+    }else{
+      title.textContent='Switch project';
+      subtitle.textContent='Pick another project to switch contexts. Files, chats, and analytics are isolated per project.';
+    }
+  }
+}
+function _closeProjectPicker(){
+  const ov=document.getElementById('projectPickerOverlay');if(ov)ov.classList.add('hidden');
+}
+function _renderProjectPicker(projects){
+  const list=document.getElementById('projectPickerList');if(!list)return;
+  const available=projects||getAvailableProjects(currentUser?.id||'');
+  if(!available.length){list.innerHTML='<div style="color:#8b949e;padding:16px">No projects available.</div>';return;}
+  list.innerHTML=available.map(p=>{
+    const col=_projectColor(p);
+    const active=p.id===CURRENT_PROJECT_ID?' active':'';
+    const legacy=p.legacyR2?'<span title="Legacy paths">LEGACY</span>':'';
+    return `<div class="project-picker-card${active}" style="--pc-color:${esc(col)}" onclick="_pickProjectFromUi('${esc(p.id)}')">`
+      +`<div class="project-picker-tile">${esc(_projectInitial(p.name||p.id))}</div>`
+      +`<div class="project-picker-name">${esc(p.name||p.id)}</div>`
+      +`<div class="project-picker-meta">${active?'CURRENT':legacy||''}</div>`
+      +`</div>`;
+  }).join('');
+}
+function _pickProjectFromUi(pid){
+  // Post-login flow: initial picker runs BEFORE showLoggedIn finished —
+  // userBadge is still hidden. Route through showLoggedIn so it does the
+  // full UI set-up + initial pull. Mid-session switch uses switchProject.
+  const ub=document.getElementById('userBadge');
+  const postLogin=!ub||ub.style.display===''||ub.style.display==='none';
+  if(postLogin){
+    _setCurrentProject(pid);
+    _closeProjectPicker();
+    showLoggedIn();
+    return;
+  }
+  switchProject(pid);
+}
+function _showNoProjectsScreen(){
+  const ov=document.getElementById('noProjectsOverlay');if(ov)ov.classList.remove('hidden');
+  const login=document.getElementById('loginOverlay');if(login)login.classList.add('hidden');
+}
+function _hideNoProjectsScreen(){
+  const ov=document.getElementById('noProjectsOverlay');if(ov)ov.classList.add('hidden');
+}
+function _renderProjectBadge(){
+  let badge=document.getElementById('projectBadge');
+  const userBadge=document.getElementById('userBadge');
+  if(!userBadge)return;
+  // Insert badge right before userBadge on first use
+  if(!badge){
+    badge=document.createElement('div');
+    badge.id='projectBadge';
+    badge.className='project-badge';
+    userBadge.parentNode.insertBefore(badge,userBadge);
+  }
+  const p=getProjectById(CURRENT_PROJECT_ID);
+  if(!p){badge.style.display='none';return;}
+  badge.style.display='inline-flex';
+  const col=_projectColor(p);
+  badge.style.setProperty('--pb-color',col);
+  const canSwitch=currentUser&&getAvailableProjects(currentUser.id).length>1;
+  badge.classList.toggle('readonly',!canSwitch);
+  badge.innerHTML=`<span class="pb-dot"></span><span class="pb-name">${esc(p.name||p.id)}</span>`
+    +(canSwitch?`<span class="pb-switch">switch</span>`:'');
+  badge.onclick=canSwitch?()=>_showProjectPicker():null;
+  badge.title=canSwitch?'Click to switch project':p.name||p.id;
 }
 
 async function _prefetchTgBotInfo(){
@@ -1429,7 +1631,6 @@ function setCat(id,val){
 const _DEFAULT_ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}];
 function _getArtists(){return state.__artists||_DEFAULT_ARTISTS;}
 const ARTISTS=_DEFAULT_ARTISTS; // initial, patched after state load
-const STORAGE_KEY="kh_vfx_tracker";
 const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
 const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5c29tY3J3amtzenNpemdrZ2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI2MTMsImV4cCI6MjA5MDc3ODYxM30.Wmz0fog7GGkqcVX8kGXR54DxsiKekr4ksHha24Odohs";
 const SUPA_HEADERS={"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json","Prefer":"return=minimal"};
@@ -1439,6 +1640,38 @@ let _lastKnownUpdatedAt=null;
 // Server uses PostgREST conditional filter data->__version=eq.<lastKnown> to
 // reject stale writes from old tabs. Bootstrapped on first save (null → 1).
 let _lastKnownVersion=null;
+// ═══════════════════════════════════════════════════════════════════════
+// MULTI-PROJECT CONTEXT
+// Each project = its own row in tracker_state (id=<projectId>).
+// A dedicated row "__registry" holds the list of projects, users, and
+// per-user project assignments. CURRENT_PROJECT_ID decides which row the
+// pull/push/realtime functions talk to.
+// ═══════════════════════════════════════════════════════════════════════
+const REGISTRY_ROW_ID="__registry";
+const LEGACY_PROJECT_ID="main";     // existing row id — kept for back-compat
+const LAST_PROJECT_KEY="kh_last_project";
+// Starts from localStorage — may change after login + project pick
+let CURRENT_PROJECT_ID=(()=>{try{return localStorage.getItem(LAST_PROJECT_KEY)||LEGACY_PROJECT_ID;}catch(e){return LEGACY_PROJECT_ID;}})();
+// In-memory registry (pulled at boot / on changes)
+let registry={projects:[],users:{},userProjects:{},artists:[]};
+let _lastKnownRegistryVersion=null;
+let _lastKnownRegistryUpdatedAt=null;
+let _savingRegistry=false,_pendingRegistrySave=false;
+// Per-project localStorage key. Old one-project installs used just
+// "kh_vfx_tracker" — we migrate that value to "kh_vfx_tracker:main" the
+// first time this runs, so cached state survives the upgrade.
+function _storageKey(pid){return "kh_vfx_tracker:"+(pid||CURRENT_PROJECT_ID||LEGACY_PROJECT_ID);}
+(function _migrateLegacyStorageKey(){
+  try{
+    const legacy=localStorage.getItem("kh_vfx_tracker");
+    if(!legacy)return;
+    const newKey="kh_vfx_tracker:"+LEGACY_PROJECT_ID;
+    if(!localStorage.getItem(newKey))localStorage.setItem(newKey,legacy);
+    // Keep the legacy key around in case we need to roll back — a later
+    // release can remove it once we are confident the migration stuck.
+  }catch(e){}
+})();
+// ═══════════════════════════════════════════════════════════════════════
 function _tryAuthLink(){
   const params=new URLSearchParams(window.location.search);
   const raw=params.get('auth');
@@ -1460,8 +1693,9 @@ function _tryAuthLink(){
     token=parts.filter((_,i)=>i%2===1).join('');
   }
   if(!token||!userId)return false;
-  if(!state.__users)return false;
-  const u=state.__users[userId];
+  // Prefer registry users (canonical source after multi-project migration);
+  // fall back to per-project state.__users for back-compat.
+  const u=registry.users?.[userId]||state.__users?.[userId];
   if(u&&u.linkToken===token){
     if(!USERS[userId])USERS[userId]=u;
     currentUser={id:userId,...USERS[userId]};
@@ -1481,6 +1715,23 @@ function _showLoginOverlay(){
   if(ov)ov.classList.remove('hidden');
   _renderLoginBox();
 }
+// Load the registry row. If it doesn't exist yet (first run on a fresh
+// deployment), pull the legacy project row for seed data and bootstrap it.
+async function _ensureRegistry(){
+  const pulled=await _pullRegistry();
+  if(pulled===null){
+    // Row missing — seed from legacy main row so existing users survive migration
+    try{
+      const prevPid=CURRENT_PROJECT_ID;
+      CURRENT_PROJECT_ID=LEGACY_PROJECT_ID;
+      await _pullRemote();
+      CURRENT_PROJECT_ID=prevPid;
+    }catch(e){}
+    await _bootstrapRegistry();
+  }
+  // Always mirror registry.users into legacy USERS object
+  if(registry.users){for(const[uid,u]of Object.entries(registry.users)){USERS[uid]=u;}}
+}
 function _initAuth(){
   // Login overlay starts hidden in HTML — we only reveal it after the
   // async auto-login flow below has decided that manual login is needed.
@@ -1489,31 +1740,24 @@ function _initAuth(){
   // still uninitialised) cannot kill the auto-login chain silently.
   (async function(){
     try{
+      // Multi-project: load the shared registry first — it holds the
+      // canonical user list and project assignments for everyone.
+      try{await _ensureRegistry();}catch(e){console.warn('ensureRegistry failed:',e);}
       const params=new URLSearchParams(window.location.search);
       if(params.get('auth')){
-        await _pullRemote();
-        if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
         if(_tryAuthLink())return;
       }
       const s=_readPersistedUser();
       if(s==="guest"){guestLogin();return;}
       if(s){
-        // For non-guest, USERS may not be populated yet — pull state first
-        if(!USERS[s]){
-          await _pullRemote();
-          if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
-        }
         if(USERS[s]){
           currentUser={id:s,...USERS[s]};
           try{_addKnownAccount(s);}catch(e){console.warn('addKnownAccount failed:',e);}
           showLoggedIn();
           return;
         }
-        // Persisted user exists but USERS lookup failed — fall through to show login
+        // Persisted user vanished from registry — fall through to manual login
       }
-      // No auto-login → ensure account list is fresh, then reveal the picker
-      try{await _pullRemote();}catch(e){}
-      if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
       _showLoginOverlay();
     }catch(e){
       console.error('initAuth crashed:',e);
@@ -1522,7 +1766,7 @@ function _initAuth(){
   })();
 }
 
-function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch{return {};}}
+function loadState(){try{return JSON.parse(localStorage.getItem(_storageKey()))||{};}catch{return {};}}
 
 // ANALYTICS — Phase 1: append-only task_events log
 // ============================================================
@@ -3276,7 +3520,7 @@ async function openAnalytics(){
 // ============================================================
 
 function saveState(s){
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
+  localStorage.setItem(_storageKey(),JSON.stringify(s));
   const n=document.getElementById("saveNotice");
   n.textContent="Saving...";n.classList.add("show");
   // [ANALYTICS] diff vs last snapshot, log events, update snapshot.
@@ -3310,7 +3554,8 @@ async function _pushRemote(s){
     // 4. Empty response array = conflict → re-pull, alert user, drop save
     const newVersion=(typeof _lastKnownVersion==='number'?_lastKnownVersion:0)+1;
     s.__version=newVersion;
-    let url=SUPA_URL+"/rest/v1/tracker_state?id=eq.main";
+    const _rowId=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+    let url=SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(_rowId);
     if(typeof _lastKnownVersion==='number'){
       url+="&data->__version=eq."+_lastKnownVersion;
     }
@@ -3353,9 +3598,137 @@ async function _pushRemote(s){
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// REGISTRY HELPERS — shared across projects (users, project list, artists)
+// ═══════════════════════════════════════════════════════════════════════
+function _normalizeRegistry(raw){
+  const r=raw||{};
+  return {
+    __version:typeof r.__version==='number'?r.__version:0,
+    projects:Array.isArray(r.projects)?r.projects:[],
+    users:(r.users&&typeof r.users==='object')?r.users:{},
+    userProjects:(r.userProjects&&typeof r.userProjects==='object')?r.userProjects:{},
+    artists:Array.isArray(r.artists)?r.artists:[]
+  };
+}
+async function _pullRegistry(){
+  try{
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(REGISTRY_ROW_ID)+"&select=data,updated_at",{
+      headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}
+    });
+    if(!r.ok)return false;
+    const rows=await r.json();
+    if(!rows.length)return null;  // row doesn't exist yet (first-run bootstrap needed)
+    const row=rows[0];
+    if(row.updated_at)_lastKnownRegistryUpdatedAt=row.updated_at;
+    if(row.data&&typeof row.data.__version==='number')_lastKnownRegistryVersion=row.data.__version;
+    if(row.data&&Object.keys(row.data).length){
+      registry=_normalizeRegistry(row.data);
+      if(registry.users){for(const[uid,u]of Object.entries(registry.users)){USERS[uid]=u;}}
+      return true;
+    }
+  }catch(e){console.error("Registry pull failed:",e);}
+  return false;
+}
+async function _pushRegistry(){
+  if(_savingRegistry){_pendingRegistrySave=true;return;}
+  _savingRegistry=true;
+  try{
+    const newVersion=(typeof _lastKnownRegistryVersion==='number'?_lastKnownRegistryVersion:0)+1;
+    registry.__version=newVersion;
+    let url=SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(REGISTRY_ROW_ID);
+    if(typeof _lastKnownRegistryVersion==='number'){
+      url+="&data->__version=eq."+_lastKnownRegistryVersion;
+    }
+    // Use upsert semantics: first try PATCH, fall back to POST if row missing
+    let r=await fetch(url,{
+      method:"PATCH",
+      headers:{...SUPA_HEADERS,"Prefer":"return=representation"},
+      body:JSON.stringify({data:registry,updated_at:new Date().toISOString()})
+    });
+    if(r.ok){
+      const updatedRows=await r.json();
+      if(Array.isArray(updatedRows)&&updatedRows.length===0&&typeof _lastKnownRegistryVersion==='number'){
+        // Conflict: re-pull and retry once
+        await _pullRegistry();
+        if(typeof _showAlert==='function')_showAlert('Registry sync conflict','The project list was changed by someone else. Your change was dropped — refresh and try again.');
+        return;
+      }
+      if(Array.isArray(updatedRows)&&updatedRows[0]?.data){
+        if(typeof updatedRows[0].data.__version==='number')_lastKnownRegistryVersion=updatedRows[0].data.__version;
+        if(updatedRows[0].updated_at)_lastKnownRegistryUpdatedAt=updatedRows[0].updated_at;
+      }
+    } else if(r.status===404){
+      // Row doesn't exist — insert it
+      r=await fetch(SUPA_URL+"/rest/v1/tracker_state",{
+        method:"POST",
+        headers:{...SUPA_HEADERS,"Prefer":"return=representation"},
+        body:JSON.stringify({id:REGISTRY_ROW_ID,data:registry,updated_at:new Date().toISOString()})
+      });
+      if(!r.ok){const t=await r.text();console.error("Registry insert failed:",t);}
+      else{
+        const ins=await r.json();
+        if(Array.isArray(ins)&&ins[0]?.data?.__version===1)_lastKnownRegistryVersion=1;
+      }
+    } else {
+      const t=await r.text();console.error("Registry PATCH failed:",t);
+    }
+  }catch(e){console.error("Registry push failed:",e);}
+  finally{
+    _savingRegistry=false;
+    if(_pendingRegistrySave){_pendingRegistrySave=false;_pushRegistry();}
+  }
+}
+// Bootstrap: called once at very first run if __registry row doesn't exist.
+// Seeds it from the hard-coded USERS const + the currently loaded state
+// (which may already have state.__users / state.__artists from prior saves).
+async function _bootstrapRegistry(){
+  const seed=_normalizeRegistry({
+    __version:0,
+    projects:[{id:LEGACY_PROJECT_ID,name:"Killhouse Main",color:"#58a6ff",createdAt:Date.now(),legacyR2:true}],
+    users:{},
+    userProjects:{},
+    artists:(state&&state.__artists)?state.__artists:[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}]
+  });
+  // Prefer any users already synced into state (pulled from prior main row)
+  const src=(state&&state.__users&&Object.keys(state.__users).length)?state.__users:USERS;
+  for(const[uid,u]of Object.entries(src||{})){
+    if(!u||!u.hash)continue;
+    seed.users[uid]={hash:u.hash,display:u.display||uid,role:u.role||'artist',linkToken:u.linkToken||null,telegram:u.telegram||null};
+    // Every non-admin user gets the legacy project by default
+    if(seed.users[uid].role!=='admin'){seed.userProjects[uid]=[LEGACY_PROJECT_ID];}
+  }
+  registry=seed;
+  await _pushRegistry();
+}
+// Decide which projects a given user can open. Admins see all; everyone
+// else sees only what's in registry.userProjects[id] (plus legacy fallback
+// so existing team members aren't locked out until an admin assigns them).
+function getAvailableProjects(userId){
+  if(!registry||!Array.isArray(registry.projects))return [];
+  const u=registry.users?.[userId]||USERS[userId];
+  if(u&&u.role==='admin')return registry.projects.slice();
+  const assigned=registry.userProjects?.[userId];
+  if(Array.isArray(assigned)&&assigned.length){
+    return registry.projects.filter(p=>assigned.includes(p.id));
+  }
+  // Legacy fallback: if a non-admin has no assignments at all, assume they
+  // belong to the main project (pre-multi-project behaviour).
+  return registry.projects.filter(p=>p.id===LEGACY_PROJECT_ID);
+}
+function getProjectById(pid){return registry?.projects?.find(p=>p.id===pid)||null;}
+function _onRegistryChanged(){
+  // Hook for UI to re-render when registry updates via realtime.
+  // Individual features (picker, admin panel) override this at runtime.
+  try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
+  try{if(typeof _renderProjectPicker==='function'&&document.getElementById('projectPickerOverlay')?.classList.contains('hidden')===false)_renderProjectPicker();}catch(e){}
+}
+// ═══════════════════════════════════════════════════════════════════════
+
 async function _pullRemote(){
   try{
-    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq.main&select=data,updated_at",{
+    const _rowId=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(_rowId)+"&select=data,updated_at",{
       headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}
     });
     if(!r.ok)return false;
@@ -3375,7 +3748,7 @@ async function _pullRemote(){
         const localRead=state.__readState&&currentUser?state.__readState[currentUser.id]:null;
         state=remote;
         if(localRead&&currentUser){if(!state.__readState)state.__readState={};state.__readState[currentUser.id]=localRead;}
-        localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+        localStorage.setItem(_storageKey(),JSON.stringify(state));
         // After remote sync: check if any shots were just delivered (client downloaded
         // their final files via Telegram bot share). Promote status accordingly.
         // Deferred so other listeners get the new state first.
@@ -3388,52 +3761,84 @@ async function _pullRemote(){
 }
 
 // --- Supabase Realtime via WebSocket ---
-function _initRealtime(){
-  const wsUrl=SUPA_URL.replace("https://","wss://")+"/realtime/v1/websocket?apikey="+SUPA_KEY+"&vsn=1.0.0";
-  let ws,heartbeat;
-  function connect(){
-    ws=new WebSocket(wsUrl);
-    ws.onopen=()=>{
-      // Join channel
-      ws.send(JSON.stringify({topic:"realtime:public:tracker_state",event:"phx_join",payload:{config:{broadcast:{self:false},postgres_changes:[{event:"UPDATE",schema:"public",table:"tracker_state",filter:"id=eq.main"}]}},ref:"1"}));
-      // Heartbeat every 30s
-      heartbeat=setInterval(()=>{ws.send(JSON.stringify({topic:"phoenix",event:"heartbeat",payload:{},ref:"hb"}));},30000);
-    };
-    ws.onmessage=(ev)=>{
-      try{
-        const msg=JSON.parse(ev.data);
-        if(msg.event==="postgres_changes"&&msg.payload?.data?.record?.data){
-          const record=msg.payload.data.record;
-          const remote=record.data;
-          // Track latest server timestamp from realtime push (debug aid)
-          if(record.updated_at)_lastKnownUpdatedAt=record.updated_at;
-          // Track __version from realtime push (for optimistic locking)
-          if(remote&&typeof remote.__version==='number')_lastKnownVersion=remote.__version;
-          if(JSON.stringify(remote)!==JSON.stringify(state)){
-            state=remote;
-            localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-            // Skip heavy re-renders while upload queue is active — causes scroll interruption
-            if(_uploadQueue.processing){return;}
-            runMigrations();
-            // Refresh GIFS so any newly-uploaded preview is visible without
-            // a page reload. _initGifs is hoisted (function declaration) so
-            // it's available even though defined later in the file.
-            if(typeof _initGifs==='function')_initGifs();
-            render();
-            if(_gifCurrentId)renderPlayerNotes();
-            if(noteTaskId&&noteType==='chat')renderChat();
-            if(_shotCurrentId&&_shotTab==='files')_renderShotFiles(_shotCurrentId);
-            if(_shotCurrentId&&_shotTab==='versions')_renderShotBody(_shotCurrentId);
-            if(_doneShotsMode&&typeof _renderDoneShotsTracker==='function')_renderDoneShotsTracker();
-          }
-        }
-      }catch(e){}
-    };
-    ws.onclose=()=>{clearInterval(heartbeat);setTimeout(connect,3000);};
-    ws.onerror=()=>{ws.close();};
-  }
-  connect();
+// Subscribes to the current project row (CURRENT_PROJECT_ID) and to the
+// shared __registry row, so both user/project config and per-project data
+// stay live. When the user switches projects, _reconnectRealtime() tears
+// down the socket and rebuilds it against the new row id.
+let _realtimeWs=null,_realtimeHeartbeat=null,_realtimeReconnectTimer=null;
+function _teardownRealtime(){
+  try{if(_realtimeReconnectTimer){clearTimeout(_realtimeReconnectTimer);_realtimeReconnectTimer=null;}}catch(e){}
+  try{if(_realtimeHeartbeat){clearInterval(_realtimeHeartbeat);_realtimeHeartbeat=null;}}catch(e){}
+  try{
+    if(_realtimeWs){
+      // Replace onclose so the auto-reconnect doesn't race with our explicit rebuild
+      _realtimeWs.onclose=null;
+      _realtimeWs.onerror=null;
+      _realtimeWs.close();
+    }
+  }catch(e){}
+  _realtimeWs=null;
 }
+function _initRealtime(){
+  _teardownRealtime();
+  const wsUrl=SUPA_URL.replace("https://","wss://")+"/realtime/v1/websocket?apikey="+SUPA_KEY+"&vsn=1.0.0";
+  const ws=new WebSocket(wsUrl);
+  _realtimeWs=ws;
+  ws.onopen=()=>{
+    // Subscribe to the current project's row
+    const pid=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+    ws.send(JSON.stringify({topic:"realtime:public:tracker_state:"+pid,event:"phx_join",payload:{config:{broadcast:{self:false},postgres_changes:[{event:"UPDATE",schema:"public",table:"tracker_state",filter:"id=eq."+pid}]}},ref:"1"}));
+    // Also subscribe to the registry row so project list / user assignments stay live
+    ws.send(JSON.stringify({topic:"realtime:public:tracker_state:"+REGISTRY_ROW_ID,event:"phx_join",payload:{config:{broadcast:{self:false},postgres_changes:[{event:"UPDATE",schema:"public",table:"tracker_state",filter:"id=eq."+REGISTRY_ROW_ID}]}},ref:"2"}));
+    _realtimeHeartbeat=setInterval(()=>{try{ws.send(JSON.stringify({topic:"phoenix",event:"heartbeat",payload:{},ref:"hb"}));}catch(e){}},30000);
+  };
+  ws.onmessage=(ev)=>{
+    try{
+      const msg=JSON.parse(ev.data);
+      if(msg.event!=="postgres_changes"||!msg.payload?.data?.record?.data)return;
+      const record=msg.payload.data.record;
+      const remote=record.data;
+      const rowId=record.id;
+      // Route based on which row changed
+      if(rowId===REGISTRY_ROW_ID){
+        if(remote&&typeof remote.__version==='number')_lastKnownRegistryVersion=remote.__version;
+        if(record.updated_at)_lastKnownRegistryUpdatedAt=record.updated_at;
+        if(JSON.stringify(remote)!==JSON.stringify(registry)){
+          registry=_normalizeRegistry(remote);
+          // Mirror users into legacy USERS object so existing code keeps working
+          if(registry.users){for(const[uid,u]of Object.entries(registry.users)){USERS[uid]=u;}}
+          if(typeof _onRegistryChanged==='function')_onRegistryChanged();
+        }
+        return;
+      }
+      // Only apply project-row updates for the CURRENT project (ignore stale
+      // events from before a project-switch). This can't happen under normal
+      // use because we tear the socket down on switch, but belt-and-braces.
+      if(rowId!==(CURRENT_PROJECT_ID||LEGACY_PROJECT_ID))return;
+      if(record.updated_at)_lastKnownUpdatedAt=record.updated_at;
+      if(remote&&typeof remote.__version==='number')_lastKnownVersion=remote.__version;
+      if(JSON.stringify(remote)!==JSON.stringify(state)){
+        state=remote;
+        localStorage.setItem(_storageKey(),JSON.stringify(state));
+        if(_uploadQueue.processing){return;}
+        runMigrations();
+        if(typeof _initGifs==='function')_initGifs();
+        render();
+        if(_gifCurrentId)renderPlayerNotes();
+        if(noteTaskId&&noteType==='chat')renderChat();
+        if(_shotCurrentId&&_shotTab==='files')_renderShotFiles(_shotCurrentId);
+        if(_shotCurrentId&&_shotTab==='versions')_renderShotBody(_shotCurrentId);
+        if(_doneShotsMode&&typeof _renderDoneShotsTracker==='function')_renderDoneShotsTracker();
+      }
+    }catch(e){}
+  };
+  ws.onclose=()=>{
+    if(_realtimeHeartbeat){clearInterval(_realtimeHeartbeat);_realtimeHeartbeat=null;}
+    _realtimeReconnectTimer=setTimeout(_initRealtime,3000);
+  };
+  ws.onerror=()=>{try{ws.close();}catch(e){}};
+}
+function _reconnectRealtime(){_initRealtime();}
 _initRealtime();
 
 /* ── Auto-update notifier ─────────────────────────────────────────────
@@ -3509,7 +3914,7 @@ if(state.__downloadTracking){
   }
 }
 TASKS=state.__tasks;
-if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+if(c)localStorage.setItem(_storageKey(),JSON.stringify(state));}
 runMigrations();
 if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}
 _loadCustomCats();
@@ -3966,8 +4371,8 @@ async function deleteShot(id){
   if(state.__files&&state.__files[id])delete state.__files[id];
   if(state.__chat&&state.__chat[id])delete state.__chat[id];
   saveState(state);
-  try{await r2Delete('video/'+id+'_prev.mp4');}catch(e){}
-  try{await r2Delete('thumbs/'+id+'.jpg');}catch(e){}
+  try{await r2Delete(projectPath('video/'+id+'_prev.mp4'));}catch(e){}
+  try{await r2Delete(projectPath('thumbs/'+id+'.jpg'));}catch(e){}
   const tbody=document.getElementById("tbody");if(tbody)tbody.dataset.ids="";
   render();updateStats();
 }
@@ -4218,7 +4623,7 @@ function toggleAdminMenu(){
   dd.className="admin-menu";dd.id="adminMenu";
   const editLabel=_editMode?"✏️ Editing... (click to stop)":"✏️ Edit Shots";
   const addShotItem=_editMode?`<div class="admin-menu-item" onclick="closeAdminMenu();openAddShotDialog()">➕ Add Shot</div>`:'';
-  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();toggleEditMode()">${editLabel}</div>${addShotItem}<div class="admin-menu-item" onclick="closeAdminMenu();openUserManager()">👥 Manage Users</div><div class="admin-menu-item" onclick="closeAdminMenu();_openAdminFiles()">📁 Admin Files</div><div class="admin-menu-item" onclick="closeAdminMenu();openBotSettings()">🤖 Bot Settings</div>`;
+  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();toggleEditMode()">${editLabel}</div>${addShotItem}<div class="admin-menu-item" onclick="closeAdminMenu();openUserManager()">👥 Manage Users</div><div class="admin-menu-item" onclick="closeAdminMenu();openProjectManager()">🗂 Manage Projects</div><div class="admin-menu-item" onclick="closeAdminMenu();_openAdminFiles()">📁 Admin Files</div><div class="admin-menu-item" onclick="closeAdminMenu();openBotSettings()">🤖 Bot Settings</div>`;
   document.body.appendChild(dd);
   setTimeout(()=>document.addEventListener("click",closeAdminMenu,{once:true}),0);
 }
@@ -4949,7 +5354,7 @@ async function _pubHandleEntries(folder,entries){
       }
       existingArr.splice(dupIdx,1);
     }
-    const r2Key='admin/'+folder+'/'+relPath;
+    const r2Key=projectPath('admin/'+folder+'/'+relPath);
     const itemId='pub-'+Date.now()+'-'+Math.random().toString(36).substr(2,4);
     listEl.insertAdjacentHTML('beforeend',`<div class="pub-upload-item" id="${itemId}"><span class="pub-icon">◌</span><span class="pub-name">${esc(relPath)}</span><span class="pub-pct">0%</span><button class="pub-item-cancel" onclick="_pubCancelled.add('${itemId}')">✕</button></div>`);
     // Upload with infinite retry
@@ -5049,6 +5454,192 @@ function _renderUserList(){
   return html;
 }
 function closeUserManager(){const d=document.getElementById("artistManagerOverlay");if(d)d.remove();}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROJECT MANAGER (admin-only) — create, rename, recolor, assign users,
+// delete projects. Writes the __registry row.
+// ═══════════════════════════════════════════════════════════════════════
+function openProjectManager(){
+  if(!isAdmin())return;
+  const ov=document.createElement("div");
+  ov.className="admin-modal-overlay";ov.id="projectManagerOverlay";
+  ov.onclick=(e)=>{if(e.target===ov)closeProjectManager();};
+  ov.innerHTML=`<div class="admin-modal" style="max-width:720px;width:90vw">
+    <div class="admin-modal-header"><h3>🗂 Manage Projects</h3><button class="admin-modal-close" onclick="closeProjectManager()">&times;</button></div>
+    <div class="admin-modal-body" id="projectManagerBody"></div>
+  </div>`;
+  document.body.appendChild(ov);
+  _renderProjectManager();
+}
+function closeProjectManager(){const d=document.getElementById("projectManagerOverlay");if(d)d.remove();}
+function _renderProjectManager(){
+  const body=document.getElementById("projectManagerBody");if(!body)return;
+  const projects=registry.projects||[];
+  const users=registry.users||{};
+  const nonAdminUsers=Object.entries(users).filter(([,u])=>u.role!=='admin');
+  let html=`<div style="font-size:12px;color:#8b949e;margin-bottom:12px">Each project has its own shots, files, chats, and analytics. R2 storage is isolated per project via path prefixes.</div>`;
+  html+=`<div id="projectManagerList">`;
+  projects.forEach((p,idx)=>{
+    const col=_projectColor(p);
+    const legacy=p.legacyR2?`<span style="font-size:10px;color:#d29922;background:#d2992222;padding:2px 6px;border-radius:4px;margin-left:6px">LEGACY PATHS</span>`:'';
+    const current=p.id===CURRENT_PROJECT_ID?`<span style="font-size:10px;color:#3fb950;background:#3fb95022;padding:2px 6px;border-radius:4px;margin-left:6px">CURRENT</span>`:'';
+    const assigned=registry.userProjects||{};
+    const assignedUsers=nonAdminUsers.filter(([uid])=>(assigned[uid]||[]).includes(p.id));
+    html+=`<div class="user-card" style="flex-direction:column;align-items:stretch;gap:10px;padding:14px 16px">`;
+    html+=`<div style="display:flex;align-items:center;gap:10px">`;
+    html+=`<div class="u-dot" style="background:${esc(col)};width:22px;height:22px;cursor:pointer" onclick="_openProjectColorPicker('${esc(p.id)}',this)"></div>`;
+    html+=`<input type="text" value="${esc(p.name||p.id)}" onchange="_renameProject('${esc(p.id)}',this.value)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:600;flex:1">`;
+    html+=`<code style="color:#8b949e;font-size:11px">${esc(p.id)}</code>`;
+    html+=legacy+current;
+    html+=`<button class="u-btn" onclick="switchProject('${esc(p.id)}');closeProjectManager()" title="Switch to this project">↪ Open</button>`;
+    if(!p.legacyR2&&p.id!==CURRENT_PROJECT_ID){
+      html+=`<button class="u-del" onclick="_deleteProject('${esc(p.id)}')" title="Delete project">&times;</button>`;
+    }
+    html+=`</div>`;
+    // User assignment row
+    html+=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 2px">`;
+    html+=`<div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.4px;margin-right:8px;align-self:center">Assigned:</div>`;
+    nonAdminUsers.forEach(([uid,u])=>{
+      const active=(assigned[uid]||[]).includes(p.id);
+      html+=`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:${active?'#1f6feb22':'#0d1117'};border:1px solid ${active?'#1f6feb':'#30363d'};border-radius:6px;cursor:pointer;font-size:12px;color:${active?'#58a6ff':'#8b949e'}">`;
+      html+=`<input type="checkbox" ${active?'checked':''} onchange="_toggleUserProject('${esc(uid)}','${esc(p.id)}',this.checked)" style="margin:0">`;
+      html+=esc(u.display||uid)+`</label>`;
+    });
+    html+=`</div>`;
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+  // Create new project form
+  html+=`<div style="margin-top:18px;padding:16px;background:#0d1117;border:1px solid #30363d;border-radius:8px">
+    <div style="font-size:14px;font-weight:600;color:#c9d1d9;margin-bottom:10px">Create new project</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="text" id="newProjectName" placeholder="Project name (e.g. Voronka, Agent)" style="background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:13px;flex:1;min-width:160px">
+      <input type="color" id="newProjectColor" value="#58a6ff" style="width:40px;height:34px;border:1px solid #30363d;border-radius:6px;background:#161b22;padding:2px;cursor:pointer" title="Project color">
+      <button onclick="_createProject()" style="background:#1f6feb;border:1px solid #1f6feb;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">+ Create</button>
+    </div>
+    <div style="font-size:11px;color:#484f58;margin-top:8px">New projects start empty. Switch to them via the header badge or this panel.</div>
+  </div>`;
+  body.innerHTML=html;
+}
+function _slugifyProjectId(name){
+  return String(name||'').trim().toLowerCase()
+    .replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'').replace(/_+/g,'_')
+    .slice(0,40)||('project_'+Date.now().toString(36));
+}
+async function _createProject(){
+  const nameInput=document.getElementById('newProjectName');
+  const colorInput=document.getElementById('newProjectColor');
+  if(!nameInput)return;
+  const name=nameInput.value.trim();
+  if(!name){await _showAlert('Missing name','Give the project a name.');return;}
+  let id=_slugifyProjectId(name);
+  const existing=new Set((registry.projects||[]).map(p=>p.id));
+  if(existing.has(id)){
+    // Ensure uniqueness
+    let i=2;while(existing.has(id+'_'+i))i++;id=id+'_'+i;
+  }
+  const color=colorInput?.value||'#58a6ff';
+  const proj={id,name,color,createdAt:Date.now(),legacyR2:false};
+  registry.projects=registry.projects||[];
+  registry.projects.push(proj);
+  // Default: no users assigned yet — admin explicitly grants access via UI
+  await _pushRegistry();
+  // Seed the project row in Supabase with an empty state so realtime has
+  // something to subscribe to. We use PATCH (upsert via POST on 404).
+  try{
+    const emptyState={__version:1,__tasks:[],__categories:{},__artists:registry.artists||[]};
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(id),{
+      method:"PATCH",
+      headers:{...SUPA_HEADERS,"Prefer":"return=representation"},
+      body:JSON.stringify({data:emptyState,updated_at:new Date().toISOString()})
+    });
+    if(r.ok){
+      const rows=await r.json();
+      if(Array.isArray(rows)&&rows.length===0){
+        // Row didn't exist — insert
+        await fetch(SUPA_URL+"/rest/v1/tracker_state",{
+          method:"POST",
+          headers:{...SUPA_HEADERS,"Prefer":"return=minimal"},
+          body:JSON.stringify({id,data:emptyState,updated_at:new Date().toISOString()})
+        });
+      }
+    } else if(r.status===404||r.status===406){
+      await fetch(SUPA_URL+"/rest/v1/tracker_state",{
+        method:"POST",
+        headers:{...SUPA_HEADERS,"Prefer":"return=minimal"},
+        body:JSON.stringify({id,data:emptyState,updated_at:new Date().toISOString()})
+      });
+    }
+  }catch(e){console.error("Seed project row failed:",e);}
+  nameInput.value="";
+  _renderProjectManager();
+}
+async function _renameProject(pid,newName){
+  const p=registry.projects?.find(x=>x.id===pid);if(!p)return;
+  newName=String(newName||'').trim();
+  if(!newName||newName===p.name)return;
+  p.name=newName;
+  await _pushRegistry();
+  try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
+}
+async function _deleteProject(pid){
+  const p=registry.projects?.find(x=>x.id===pid);if(!p)return;
+  if(p.legacyR2){await _showAlert('Protected','The legacy project cannot be deleted from this UI.');return;}
+  if(pid===CURRENT_PROJECT_ID){await _showAlert('Switch first','You are currently in this project — switch to a different one before deleting.');return;}
+  const ok=await _showConfirm('Delete project?','All data for "'+esc(p.name||pid)+'" will be detached. Files on R2 stay but won\'t be visible from the tracker. This cannot be undone.');
+  if(!ok)return;
+  registry.projects=registry.projects.filter(x=>x.id!==pid);
+  // Also scrub userProjects entries
+  if(registry.userProjects){
+    for(const uid of Object.keys(registry.userProjects)){
+      registry.userProjects[uid]=(registry.userProjects[uid]||[]).filter(x=>x!==pid);
+      if(registry.userProjects[uid].length===0)delete registry.userProjects[uid];
+    }
+  }
+  await _pushRegistry();
+  // Also drop the row from tracker_state (best effort)
+  try{
+    await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(pid),{
+      method:"DELETE",
+      headers:{...SUPA_HEADERS}
+    });
+  }catch(e){}
+  _renderProjectManager();
+}
+async function _toggleUserProject(userId,projectId,enabled){
+  if(!registry.userProjects)registry.userProjects={};
+  const arr=registry.userProjects[userId]||[];
+  const set=new Set(arr);
+  if(enabled)set.add(projectId);else set.delete(projectId);
+  registry.userProjects[userId]=[...set];
+  if(registry.userProjects[userId].length===0)delete registry.userProjects[userId];
+  await _pushRegistry();
+}
+// Reuse the color-picker dropdown from openColorPicker by forwarding to it
+// with a project-aware commit handler. Simple inline picker instead.
+function _openProjectColorPicker(pid,anchor){
+  const old=document.getElementById('projectColorPicker');if(old)old.remove();
+  const colors=["#e06c75","#e5c07b","#98c379","#56b6c2","#61afef","#c678dd","#d19a66","#be5046","#7ec8e3","#f0883e","#58a6ff","#3fb950","#f85149","#d29922","#8b949e"];
+  const dd=document.createElement('div');
+  dd.id='projectColorPicker';dd.className='color-picker-dd';
+  const r=anchor.getBoundingClientRect();
+  dd.style.cssText=`position:fixed;top:${r.bottom+6}px;left:${r.left}px;z-index:10000;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;width:200px`;
+  colors.forEach(c=>{
+    const dot=document.createElement('div');
+    dot.className='cp-dot';dot.style.cssText=`width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;border:2px solid transparent`;
+    dot.onclick=async()=>{
+      const p=registry.projects?.find(x=>x.id===pid);if(!p)return;
+      p.color=c;
+      await _pushRegistry();
+      dd.remove();
+      _renderProjectManager();
+      try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
+    };
+    dd.appendChild(dot);
+  });
+  document.body.appendChild(dd);
+  setTimeout(()=>document.addEventListener('click',function h(ev){if(!dd.contains(ev.target)&&ev.target!==anchor){dd.remove();document.removeEventListener('click',h,true);}},true),10);
+}
 function setUserTelegram(id,val,silent){
   if(!state.__users)state.__users={};
   if(!state.__users[id])state.__users[id]={};
@@ -5056,7 +5647,10 @@ function setUserTelegram(id,val,silent){
   if(clean)state.__users[id].telegram=clean;
   else delete state.__users[id].telegram;
   if(USERS[id])USERS[id].telegram=clean||undefined;
-  if(!silent)saveState(state);
+  if(!silent){
+    saveState(state);
+    _syncUserToRegistry(id,{telegram:clean||null});
+  }
 }
 
 /* ── BOT SETTINGS PANEL ── */
@@ -5329,6 +5923,23 @@ function _generateKey(len){
   }
   return r;
 }
+// Upsert a user into the shared registry and push it. Keeps legacy USERS
+// const + state.__users in sync so every callsite sees the same object.
+function _syncUserToRegistry(id,patch){
+  if(!registry.users)registry.users={};
+  const merged={...(registry.users[id]||{}),...patch,hash:patch.hash||registry.users[id]?.hash,display:patch.display||registry.users[id]?.display,role:patch.role||registry.users[id]?.role||'artist'};
+  // Strip undefined telegram without losing empty-string reset
+  if(patch.telegram===undefined&&merged.telegram===undefined)delete merged.telegram;
+  registry.users[id]=merged;
+  USERS[id]={...merged};
+  // Fire-and-forget push; callers can await if they want
+  return _pushRegistry();
+}
+function _removeUserFromRegistry(id){
+  if(registry.users)delete registry.users[id];
+  if(registry.userProjects)delete registry.userProjects[id];
+  return _pushRegistry();
+}
 async function addUser(){
   if(!isAdmin())return;
   const inp=document.getElementById("newUserName");
@@ -5354,6 +5965,14 @@ async function addUser(){
     state.__artists=artists;
   }
   saveState(state);
+  // Mirror into registry so login + multi-project routing see the new user
+  await _syncUserToRegistry(id,{hash,display:name,role,linkToken,telegram:tg||null});
+  // Default assignment: the current project, so the new user sees *something*
+  if(role!=='admin'&&CURRENT_PROJECT_ID){
+    if(!registry.userProjects)registry.userProjects={};
+    registry.userProjects[id]=[CURRENT_PROJECT_ID];
+    await _pushRegistry();
+  }
   inp.value="";
   if(tgInp)tgInp.value="";
   document.getElementById("generatedKeyBox").innerHTML=`<div class="generated-key"><code>${key}</code><button onclick="navigator.clipboard.writeText('${key}');this.textContent='Copied!'">Copy</button></div><div style="color:#8b949e;font-size:11px;margin-top:4px">${esc(name)} uses this key to log in.</div>`;
@@ -5373,6 +5992,7 @@ async function regenKey(id){
   state.__users[id].plainKey=key;
   state.__users[id].linkToken=linkToken;
   saveState(state);
+  await _syncUserToRegistry(id,{hash,linkToken});
   document.getElementById("userList").innerHTML=_renderUserList();
 }
 function changeUserRole(id,role){
@@ -5386,6 +6006,7 @@ function changeUserRole(id,role){
   if(role==="artist")artists.push({id,display:USERS[id].display});
   state.__artists=artists;
   saveState(state);
+  _syncUserToRegistry(id,{role});
   document.getElementById("userList").innerHTML=_renderUserList();
   render();
 }
@@ -5408,6 +6029,7 @@ function removeUser(id){
   if(state.__users)delete state.__users[id];
   state.__artists=_getArtists().filter(a=>a.id!==id);
   saveState(state);
+  _removeUserFromRegistry(id);
   document.getElementById("userList").innerHTML=_renderUserList();
   render();
 }
@@ -6583,7 +7205,7 @@ function cancelPaste(){
 async function _uploadChatImage(file){
   const ts=Date.now();
   const ext=file.name?.split('.').pop()||'png';
-  const key=`chat/${noteTaskId}/img_${ts}.${ext}`;
+  const key=projectPath(`chat/${noteTaskId}/img_${ts}.${ext}`);
   const ok=await r2UploadXHR(key,file,()=>{});
   if(!ok)return null;
   return CDN_BASE+'/'+key;
@@ -8070,8 +8692,8 @@ async function updateOriginal(shotId,input){
   input.value="";
   const ok=await _showConfirm("Update original?","Replace original video for "+shotId+".<br>All notes, drawings and comments will be preserved.");
   if(!ok)return;
-  const videoKey="video/"+shotId+"_prev.mp4";
-  const thumbKey="thumbs/"+shotId+".jpg";
+  const videoKey=projectPath("video/"+shotId+"_prev.mp4");
+  const thumbKey=projectPath("thumbs/"+shotId+".jpg");
   _uploads[shotId]={name:"Updating original...",pct:0,done:false,error:false};
   if(_shotCurrentId===shotId)_renderShotBody(shotId);
   const uploadOk=await r2UploadXHR(videoKey,file,(pct)=>{
@@ -8091,8 +8713,8 @@ async function uploadOriginalPreview(shotId,input){
   const file=input.files[0];
   if(!file||!isAdmin())return;
   input.value="";
-  const videoKey="video/"+shotId+"_prev.mp4";
-  const thumbKey="thumbs/"+shotId+".jpg";
+  const videoKey=projectPath("video/"+shotId+"_prev.mp4");
+  const thumbKey=projectPath("thumbs/"+shotId+".jpg");
   _uploads[shotId]={name:"Uploading preview...",pct:0,done:false,error:false};
   if(_shotCurrentId===shotId)_renderShotBody(shotId);
   const uploadOk=await r2UploadXHR(videoKey,file,(pct)=>{
@@ -8598,7 +9220,7 @@ function _commitUploadedFile(item){
     saveState(state);
     const newIdx=state[id].versions.length-1;
     // Generate thumb async (don't block queue)
-    const thumbKey="versions/"+id+"/thumb_"+item.meta.baseName+"_prev"+_formatVersion(item.meta.vNum)+".jpg";
+    const thumbKey=projectPath("versions/"+id+"/thumb_"+item.meta.baseName+"_prev"+_formatVersion(item.meta.vNum)+".jpg");
     _generateThumbnail(CDN_BASE+"/"+item.r2Key,thumbKey).then(url=>{
       const v=state[id].versions.find(v=>v.name===item.meta.versionName);
       if(v)v.thumb=url;
@@ -9307,11 +9929,13 @@ async function _renameFolder(id,folderName){
   _renderShotFiles(id);
 }
 function _getCurrentR2Folder(id){
-  if(id==='__admin'){return _filesPath.length===0?'admin':'admin/'+_filesPath.join('/');}
-  if(id==='__myfiles'&&_filesPath.length>0){const shotId=_filesPath[0];const rest=_filesPath.slice(1);return rest.length?'files/'+shotId+'/'+rest.join('/'):'files/'+shotId;}
-  if(id==='__doneshots'&&_filesPath.length>0){return 'files/'+_filesPath[0]+'/versions/final';}
-  if(_filesPath.length===0)return 'files/'+id;
-  return 'files/'+id+'/'+_filesPath.join('/');
+  let base;
+  if(id==='__admin'){base=_filesPath.length===0?'admin':'admin/'+_filesPath.join('/');}
+  else if(id==='__myfiles'&&_filesPath.length>0){const shotId=_filesPath[0];const rest=_filesPath.slice(1);base=rest.length?'files/'+shotId+'/'+rest.join('/'):'files/'+shotId;}
+  else if(id==='__doneshots'&&_filesPath.length>0){base='files/'+_filesPath[0]+'/versions/final';}
+  else if(_filesPath.length===0)base='files/'+id;
+  else base='files/'+id+'/'+_filesPath.join('/');
+  return projectPath(base);
 }
 function _getCurrentStateKey(){
   if(_shotCurrentId==='__admin'){return _filesPath.length===0?'_root':_filesPath.join('/');}
@@ -9530,7 +10154,7 @@ async function _uploadFilesToR2(id,fileList){
     for(const file of fileList){
       const result=await _validateAndPrepareVersion(id,file);
       if(!result.ok)continue;
-      queue.push({file:result.file,r2Key:"versions/"+id+"/"+result.versionName,stateKey,meta:{isVersion:true,versionName:result.versionName,baseName:result.baseName,vNum:result.vNum}});
+      queue.push({file:result.file,r2Key:projectPath("versions/"+id+"/"+result.versionName),stateKey,meta:{isVersion:true,versionName:result.versionName,baseName:result.baseName,vNum:result.vNum}});
     }
     if(queue.length)_enqueueFiles(id,queue);
     return;
@@ -9583,7 +10207,7 @@ async function _uploadFilesToR2(id,fileList){
           '→ source/preview','Upload here anyway');
         if(choice===null)continue;
         if(choice==='a'){
-          queue.push({file,r2Key:'files/'+id+'/source/preview/'+file.name,stateKey:'source/preview',meta:{}});
+          queue.push({file,r2Key:projectPath('files/'+id+'/source/preview/'+file.name),stateKey:'source/preview',meta:{}});
           continue;
         }
       }
@@ -10480,6 +11104,17 @@ const R2_ACCESS_KEY="d9fd350d6e623ab85ccb0a58930a35d8";
 const R2_SECRET_KEY="4498ba8839c82bd88fd4a9d3e4d9edb44268ff73a646d818314d6df8be6eb1f8";
 const R2_ENDPOINT="https://6b4341dd25b4f283d53ad86424e39e74.r2.cloudflarestorage.com";
 const R2_BUCKET="kh-vfx-video";
+// Multi-project R2 path helper. Legacy project (main) keeps unprefixed
+// paths so pre-migration files stay reachable; every other project gets
+// a "{projectId}/" prefix so R2 listing + downloads stay isolated.
+// Idempotent — safe to call multiple times on the same key.
+function projectPath(key){
+  const pid=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+  if(!pid||pid===LEGACY_PROJECT_ID)return key;
+  if(!key)return key;
+  const prefix=pid+'/';
+  return key.startsWith(prefix)?key:prefix+key;
+}
 
 async function _hmac(key,msg){
   const k=typeof key==="string"?new TextEncoder().encode(key):key;
@@ -10661,7 +11296,7 @@ async function uploadVersion(shotId,input){
   if(!result.ok)return;
 
   const ts=Date.now();
-  const key="versions/"+shotId+"/"+result.versionName;
+  const key=projectPath("versions/"+shotId+"/"+result.versionName);
   _uploads[shotId]={name:result.versionName,pct:0,done:false,error:false,stage:'uploading'};
   if(_shotCurrentId===shotId)_renderShotBody(shotId);
   const ok=await r2UploadXHR(key,result.file,(pct)=>{
