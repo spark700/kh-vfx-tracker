@@ -1105,7 +1105,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0129</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0130</div>
 
 <script>
 const USERS = {
@@ -7984,7 +7984,7 @@ function _initGifs(){
   // Legacy: check thumbs existence for shots without state entry
   for(const t of TASKS){
     if(!GIFS.has(t.id)){
-      const img=new Image();img.src=CDN_BASE+'/thumbs/'+t.id+'.jpg';
+      const img=new Image();img.src=CDN_BASE+'/'+projectPath('thumbs/'+t.id+'.jpg');
       img.onload=()=>{GIFS.add(t.id);const tbody=document.getElementById("tbody");if(tbody){tbody.dataset.ids="";render();}};
     }
   }
@@ -7995,7 +7995,7 @@ function thumbPreviewStart(wrap,id){
   const playIcon=wrap.querySelector('.gif-play-icon');
   const vid=document.createElement('video');
   vid.className='gif-thumb';
-  vid.src=CDN_BASE+'/video/'+id+'_prev.mp4';
+  vid.src=CDN_BASE+'/'+projectPath('video/'+id+'_prev.mp4');
   vid.muted=true;vid.loop=true;vid.playsInline=true;vid.preload='auto';
   vid.style.position='absolute';vid.style.top='0';vid.style.left='0';vid.style.width='100%';vid.style.height='100%';vid.style.objectFit='cover';vid.style.borderRadius='4px';
   vid.style.opacity='0';vid.style.transition='opacity 0.3s';
@@ -8102,7 +8102,7 @@ function openGif(id){
   if(_gifVersionIdx>=0&&versions[_gifVersionIdx]?.url){
     vid.src=versions[_gifVersionIdx].url;
   } else {
-    vid.src=CDN_BASE+"/video/"+id+"_prev.mp4";
+    vid.src=CDN_BASE+"/"+projectPath("video/"+id+"_prev.mp4");
     _gifVersionIdx=-1;
   }
   vid.load();
@@ -8754,7 +8754,7 @@ function _renderShotBody(id){
   let html="";
   if(hasGif(id)){
     html+=`<div class="shot-media-card" onclick="closeShot();openGif('${id}')">
-      <div class="shot-media-img"><img src="${CDN_BASE}/thumbs/${id}.jpg" alt="${id}"></div>
+      <div class="shot-media-img"><img src="${CDN_BASE}/${projectPath('thumbs/'+id+'.jpg')}" alt="${id}"></div>
       <div class="shot-media-label"><span class="play-icon">▶</span> Original${isAdmin()?`<button class="ver-del" onclick="event.stopPropagation();document.getElementById('origFileInput').click()" title="Update original">&#8635;</button>`:''}
       </div>
     </div>`;
@@ -9031,7 +9031,7 @@ function _getFilesRoot(id){
   if(statePreviewFiles.length){
     sourcePreview=statePreviewFiles.map(f=>({name:f.name,size:f.size?_formatSize(f.size):'…',_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
   } else if(hasSrc){
-    const srcUrl=CDN_BASE+"/video/"+id+"_prev.mp4";
+    const srcUrl=CDN_BASE+"/"+projectPath("video/"+id+"_prev.mp4");
     const srcBytes=_sizeCache[srcUrl]>0?_sizeCache[srcUrl]:0;
     sourcePreview=[{name:id+"_prev.mp4",size:srcBytes?_formatSize(srcBytes):'…',_bytes:srcBytes,date:"—",url:srcUrl}];
     if(!_sizeCache[srcUrl])_fetchSize(srcUrl,()=>{if(_shotCurrentId===id&&_shotTab==='files')_renderShotFiles(id);});
@@ -9865,7 +9865,7 @@ function _dsHoverPickPreviewUrl(shotId){
   // Fallback: source preview (state files or convention)
   const srcArr=state[shotId]?.files?.['source/preview']||[];
   if(srcArr.length&&srcArr[0]?.r2key)return {url:CDN_BASE+'/'+srcArr[0].r2key,label:'source'};
-  if(typeof hasGif==='function'&&hasGif(shotId))return {url:CDN_BASE+'/video/'+shotId+'_prev.mp4',label:'source'};
+  if(typeof hasGif==='function'&&hasGif(shotId))return {url:CDN_BASE+'/'+projectPath('video/'+shotId+'_prev.mp4'),label:'source'};
   return null;
 }
 function _dsHoverShow(shotId,e,borderColor){
@@ -10719,7 +10719,7 @@ function switchVersion(idx){
   _gifVersionIdx=idx;
   _setPlayerCache(_gifCurrentId,idx);
   if(idx<0){
-    vid.src=CDN_BASE+"/video/"+_gifCurrentId+"_prev.mp4";
+    vid.src=CDN_BASE+"/"+projectPath("video/"+_gifCurrentId+"_prev.mp4");
   } else {
     const v=(state[_gifCurrentId]?.versions||[])[idx];
     if(!v)return;
@@ -11559,7 +11559,7 @@ function _buildRow(r){
   return `<tr class="${rowPrioClass}" data-row-status="${st}">
     <td><div class="${prioTagClass}" ${prioClick} ${prioStyle}></div></td>
     <td style="color:#484f58">${r.idx}</td>
-    <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
+    <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/${projectPath('thumbs/'+r.id+'.jpg')}" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="shot-info-cell" onmouseenter="showSiTooltip('${r.id}',event)" onmousemove="moveSiTooltip(event)" onmouseleave="hideSiTooltip()" onclick="event.stopPropagation();pinSiTooltip('${r.id}')" data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
     <td class="category-cell">${isAdmin()&&isEditMode()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
     <td class="tc-cell">${r.tcIn}</td>

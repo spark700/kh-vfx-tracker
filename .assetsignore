@@ -1,0 +1,19 @@
+gif/
+video/
+thumbs/
+ffmpeg/
+backups/
+__pycache__/
+worker previev/
+.wrangler/
+.git/
+.DS_Store
+*.py
+*.sh
+*.toml
+*.jsonc
+*.backup-*
+*.deploy_draft
+*.json
+server.py
+worker-auth.js

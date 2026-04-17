@@ -1139,6 +1139,77 @@ async function _mcpR2Delete(key) {
   return true;
 }
 
+// Guess content-type from filename extension — used when caller omits content_type.
+function _mcpGuessContentType(filename) {
+  const ext = (String(filename || '').split('.').pop() || '').toLowerCase();
+  const map = {
+    mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo', m4v: 'video/x-m4v',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', tif: 'image/tiff', tiff: 'image/tiff',
+    mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4',
+    json: 'application/json', txt: 'text/plain', pdf: 'application/pdf', zip: 'application/zip',
+    aep: 'application/octet-stream', drp: 'application/octet-stream', nk: 'application/octet-stream',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+// Decode a base64 string (no data URI prefix) into Uint8Array.
+function _mcpDecodeBase64(b64) {
+  // atob works fine in Cloudflare Workers; wrap to give a helpful error.
+  const binStr = atob(b64);
+  const bytes = new Uint8Array(binStr.length);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  return bytes;
+}
+
+// Raw-bytes cap for kh_upload_file_inline. CF Worker memory limit is 128 MB;
+// we need room for the base64 string + decoded bytes + R2 signing overhead.
+const MCP_INLINE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+
+// Query-string presigned PUT URL (AWS SigV4). The resulting URL allows a
+// client to PUT bytes directly to R2 without any further auth. Used when a
+// file is too large for inline upload (e.g. multi-hundred-MB originals).
+async function _mcpPresignR2Put(key, expiresInSec) {
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const dateStamp = amzDate.substring(0, 8);
+  const region = 'auto', service = 's3';
+  const host = new URL(MCP_R2_ENDPOINT).host;
+  const encodedPath = '/' + MCP_R2_BUCKET + '/' + key.split('/').map(s => encodeURIComponent(s)).join('/');
+  const scope = dateStamp + '/' + region + '/' + service + '/aws4_request';
+  const credential = MCP_R2_ACCESS_KEY + '/' + scope;
+  const signedHeaders = 'host';
+  const params = {
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': credential,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(expiresInSec),
+    'X-Amz-SignedHeaders': signedHeaders,
+  };
+  const sortedKeys = Object.keys(params).sort();
+  const canonicalQuery = sortedKeys.map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
+  const canonicalHeaders = 'host:' + host + '\n';
+  const canonicalRequest = ['PUT', encodedPath, canonicalQuery, canonicalHeaders, signedHeaders, 'UNSIGNED-PAYLOAD'].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, await _mcpSha256Hex(canonicalRequest)].join('\n');
+  const signingKey = await _mcpSigningKey(MCP_R2_SECRET_KEY, dateStamp, region, service);
+  const sig = [...await _mcpHmac(signingKey, stringToSign)].map(b => b.toString(16).padStart(2, '0')).join('');
+  return MCP_R2_ENDPOINT + encodedPath + '?' + canonicalQuery + '&X-Amz-Signature=' + sig;
+}
+
+// HEAD an R2 object and return {size, contentType}. Returns null if absent.
+async function _mcpR2Head(key) {
+  const signed = await _mcpSignR2('HEAD', key, null);
+  const r = await fetch(signed.url, { method: 'HEAD', headers: signed.headers });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('R2 HEAD failed: ' + r.status);
+  return {
+    size: parseInt(r.headers.get('content-length') || '0', 10),
+    contentType: r.headers.get('content-type') || null,
+  };
+}
+
+// Default presigned URL TTL (seconds) when caller omits it.
+const MCP_PRESIGN_DEFAULT_TTL = 900;
+
 // Project scope check — token may be limited to specific projects.
 function _mcpCanAccess(tokenEntry, projectId) {
   const scopes = tokenEntry.projects || [];
@@ -1363,6 +1434,68 @@ const MCP_TOOL_DEFS = [
       required: ['shot_id', 'state_key', 'src_url', 'filename'], additionalProperties: false,
     },
     annotations: { title: 'Upload File From URL', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  },
+  {
+    name: 'kh_upload_file_inline',
+    description: 'Upload a local file to a shot\'s R2 folder by inlining its bytes as base64. Use this when the file lives on the caller\'s machine and has no public URL (e.g. previews or versions produced locally). The server decodes the base64, stores the bytes in R2, and records the file in state[shot_id].files[state_key]. Max raw size is 50 MB — for larger files request a presigned URL instead. Always prefer kh_upload_file_from_url when the file is already reachable via HTTPS (faster, no memory pressure).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string' }, shot_id: { type: 'string' },
+        state_key: { type: 'string', description: 'Where to store it in state.files — e.g. "source/original", "source/preview", "source/assets", "versions/final". Use "_root" for no subfolder.' },
+        filename: { type: 'string', description: 'Filename to save as, including extension. Extension is used to guess content-type when content_type is omitted.' },
+        content_base64: { type: 'string', description: 'Raw file bytes encoded as standard base64. Do NOT include a data URI prefix (e.g. "data:video/mp4;base64,"). Produce with e.g. `base64 -i path/to/file` on macOS/Linux.' },
+        content_type: { type: 'string', description: 'MIME type of the file. If omitted, guessed from the filename extension (common video/image/audio types supported; falls back to application/octet-stream).' },
+        author: { type: 'string', description: 'Display name to record as uploader. Defaults to the MCP token\'s name or "mcp".' },
+      },
+      required: ['shot_id', 'state_key', 'filename', 'content_base64'], additionalProperties: false,
+    },
+    annotations: { title: 'Upload File Inline (base64)', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'kh_create_upload_url',
+    description: 'Step 1 of the large-file upload workflow. Returns a short-lived presigned R2 PUT URL that the caller must upload raw bytes to (e.g. `curl -X PUT --data-binary @file "URL"`). After a successful PUT, call kh_finalize_upload with the returned r2key to register the file in the shot\'s state. This is the preferred path for files above ~50 MB (previews for huge originals, source masters, long video renders). For small files (<50 MB) kh_upload_file_inline is simpler — one call instead of three.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string' }, shot_id: { type: 'string' },
+        state_key: { type: 'string', description: 'Where to store it — e.g. "source/original", "source/preview", "source/assets", "versions/final". Use "_root" for no subfolder.' },
+        filename: { type: 'string', description: 'Filename to save as, including extension.' },
+        expires_in: { type: 'integer', minimum: 60, maximum: 3600, default: 900, description: 'Presigned URL TTL in seconds. Default 900 (15 min). Set longer for slow uploads.' },
+      },
+      required: ['shot_id', 'state_key', 'filename'], additionalProperties: false,
+    },
+    annotations: { title: 'Create Upload URL', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'kh_finalize_upload',
+    description: 'Step 2 of the large-file upload workflow. Call after successfully PUTting bytes to the presigned URL from kh_create_upload_url. This verifies the R2 object exists (HEAD) and registers the file in state[shot_id].files[state_key]. Pass the exact r2key returned by kh_create_upload_url — the server derives real size and content-type from R2 itself.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string' }, shot_id: { type: 'string' },
+        state_key: { type: 'string', description: 'Same state_key used in kh_create_upload_url.' },
+        filename: { type: 'string', description: 'Same filename used in kh_create_upload_url.' },
+        r2key: { type: 'string', description: 'Exact r2key returned by kh_create_upload_url.' },
+        author: { type: 'string', description: 'Display name to record as uploader. Defaults to the MCP token\'s name or "mcp".' },
+      },
+      required: ['shot_id', 'state_key', 'filename', 'r2key'], additionalProperties: false,
+    },
+    annotations: { title: 'Finalize Upload', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'kh_presign_raw_put_url',
+    description: 'Low-level sibling of kh_create_upload_url: returns a presigned R2 PUT URL for an arbitrary path (relative to the project prefix), without any state bookkeeping. Use this when you need to write files at a fixed convention path that the UI reads directly — e.g. "video/{shotId}_prev.mp4" (preview videos rendered by the UI player) or "thumbs/{shotId}.jpg" (poster thumbnails). The server prepends the project prefix automatically (except for the legacy "main" project). Pair with kh_finalize_upload when you also want a record in state.files; skip finalize for convention-path assets like thumbnails.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string' },
+        raw_path: { type: 'string', description: 'Path relative to the project prefix. Examples: "video/H_01_448_14_prev.mp4", "thumbs/H_01_448_14.jpg", "admin/exports/foo.zip". Do NOT start with a slash, and do NOT include the project prefix — the server adds it.' },
+        expires_in: { type: 'integer', minimum: 60, maximum: 3600, default: 900, description: 'Presigned URL TTL in seconds. Default 900 (15 min).' },
+      },
+      required: ['raw_path'], additionalProperties: false,
+    },
+    annotations: { title: 'Presign Raw PUT URL', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
   {
     name: 'kh_delete_file',
@@ -1704,6 +1837,114 @@ const MCP_TOOL_HANDLERS = {
       }
     });
     return _mcpToolJson({ ok: true, project: project.id, shot_id: args.shot_id, file: { ...fileRec, url: MCP_CDN_BASE + '/' + r2key } });
+  },
+
+  async kh_upload_file_inline(args, ctx) {
+    const { project } = await _mcpResolveProject(args.project, ctx.token);
+    // Quick sanity check on base64 size before decoding (rough ratio 4:3).
+    const b64 = String(args.content_base64 || '');
+    if (!b64) throw new Error('content_base64 is empty. Provide raw file bytes encoded as standard base64 (no data URI prefix).');
+    const approxRaw = Math.floor(b64.length * 0.75);
+    if (approxRaw > MCP_INLINE_UPLOAD_MAX_BYTES) {
+      const mb = (approxRaw / 1024 / 1024).toFixed(1);
+      throw new Error('File too large for inline upload (' + mb + ' MB > ' + Math.floor(MCP_INLINE_UPLOAD_MAX_BYTES / 1024 / 1024) + ' MB max). For larger files, host the file at a public HTTPS URL and call kh_upload_file_from_url instead.');
+    }
+    let bytes;
+    try { bytes = _mcpDecodeBase64(b64); }
+    catch (e) { throw new Error('Invalid content_base64: ' + (e?.message || e) + '. Make sure the string is standard base64 with no data URI prefix.'); }
+    if (bytes.byteLength > MCP_INLINE_UPLOAD_MAX_BYTES) {
+      throw new Error('Decoded payload exceeds inline upload limit (' + Math.floor(MCP_INLINE_UPLOAD_MAX_BYTES / 1024 / 1024) + ' MB).');
+    }
+    const contentType = args.content_type || _mcpGuessContentType(args.filename);
+    let base;
+    if (args.shot_id === '__admin') base = 'admin' + (args.state_key && args.state_key !== '_root' ? '/' + args.state_key : '') + '/' + args.filename;
+    else base = 'files/' + args.shot_id + (args.state_key && args.state_key !== '_root' ? '/' + args.state_key : '') + '/' + args.filename;
+    const r2key = _mcpProjectPath(project.id, base);
+    await _mcpR2Put(r2key, bytes, contentType);
+    const fileRec = {
+      name: args.filename,
+      size: bytes.byteLength,
+      r2key,
+      author: args.author || ctx.token.name || 'mcp',
+      date: new Date().toISOString().slice(0, 10),
+    };
+    await _mcpUpdateRow(project.id, async (data) => {
+      if (args.shot_id === '__admin') {
+        if (!data.__admin) data.__admin = {};
+        if (!data.__admin.files) data.__admin.files = {};
+        const k = args.state_key || '_root';
+        if (!data.__admin.files[k]) data.__admin.files[k] = [];
+        data.__admin.files[k].push(fileRec);
+      } else {
+        if (!data[args.shot_id]) data[args.shot_id] = {};
+        if (!data[args.shot_id].files) data[args.shot_id].files = {};
+        const k = args.state_key || '_root';
+        if (!data[args.shot_id].files[k]) data[args.shot_id].files[k] = [];
+        data[args.shot_id].files[k].push(fileRec);
+      }
+    });
+    return _mcpToolJson({ ok: true, project: project.id, shot_id: args.shot_id, file: { ...fileRec, url: MCP_CDN_BASE + '/' + r2key } });
+  },
+
+  async kh_create_upload_url(args, ctx) {
+    const { project } = await _mcpResolveProject(args.project, ctx.token);
+    let base;
+    if (args.shot_id === '__admin') base = 'admin' + (args.state_key && args.state_key !== '_root' ? '/' + args.state_key : '') + '/' + args.filename;
+    else base = 'files/' + args.shot_id + (args.state_key && args.state_key !== '_root' ? '/' + args.state_key : '') + '/' + args.filename;
+    const r2key = _mcpProjectPath(project.id, base);
+    const ttl = Math.min(Math.max(parseInt(args.expires_in || MCP_PRESIGN_DEFAULT_TTL, 10), 60), 3600);
+    const url = await _mcpPresignR2Put(r2key, ttl);
+    return _mcpToolJson({
+      ok: true, project: project.id, shot_id: args.shot_id,
+      method: 'PUT', url, r2key,
+      expires_in: ttl,
+      hint: 'Upload with: curl -X PUT --data-binary @/path/to/file "<url>"  (no auth headers needed). Then call kh_finalize_upload with the same shot_id, state_key, filename, r2key.',
+    });
+  },
+
+  async kh_finalize_upload(args, ctx) {
+    const { project } = await _mcpResolveProject(args.project, ctx.token);
+    const head = await _mcpR2Head(args.r2key);
+    if (!head) throw new Error('R2 object not found at r2key "' + args.r2key + '". Either the PUT to the presigned URL failed, or the URL expired. Call kh_create_upload_url again, re-upload, then retry finalize.');
+    const fileRec = {
+      name: args.filename,
+      size: head.size,
+      r2key: args.r2key,
+      author: args.author || ctx.token.name || 'mcp',
+      date: new Date().toISOString().slice(0, 10),
+    };
+    await _mcpUpdateRow(project.id, async (data) => {
+      if (args.shot_id === '__admin') {
+        if (!data.__admin) data.__admin = {};
+        if (!data.__admin.files) data.__admin.files = {};
+        const k = args.state_key || '_root';
+        if (!data.__admin.files[k]) data.__admin.files[k] = [];
+        data.__admin.files[k].push(fileRec);
+      } else {
+        if (!data[args.shot_id]) data[args.shot_id] = {};
+        if (!data[args.shot_id].files) data[args.shot_id].files = {};
+        const k = args.state_key || '_root';
+        if (!data[args.shot_id].files[k]) data[args.shot_id].files[k] = [];
+        data[args.shot_id].files[k].push(fileRec);
+      }
+    });
+    return _mcpToolJson({ ok: true, project: project.id, shot_id: args.shot_id, file: { ...fileRec, url: MCP_CDN_BASE + '/' + args.r2key, contentType: head.contentType } });
+  },
+
+  async kh_presign_raw_put_url(args, ctx) {
+    const { project } = await _mcpResolveProject(args.project, ctx.token);
+    const rel = String(args.raw_path || '').replace(/^\/+/, '');
+    if (!rel) throw new Error('raw_path is empty. Provide a path relative to the project prefix, e.g. "video/{shotId}_prev.mp4".');
+    const r2key = _mcpProjectPath(project.id, rel);
+    const ttl = Math.min(Math.max(parseInt(args.expires_in || MCP_PRESIGN_DEFAULT_TTL, 10), 60), 3600);
+    const url = await _mcpPresignR2Put(r2key, ttl);
+    return _mcpToolJson({
+      ok: true, project: project.id,
+      method: 'PUT', url, r2key,
+      expires_in: ttl,
+      public_url: MCP_CDN_BASE + '/' + r2key,
+      hint: 'Upload with: curl -X PUT --data-binary @/path/to/file "<url>". No finalize required — this tool never touches state.files. Call kh_finalize_upload separately if you want a record in state.',
+    });
   },
 
   async kh_delete_file(args, ctx) {
