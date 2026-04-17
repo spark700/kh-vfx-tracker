@@ -1105,7 +1105,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0131</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0132</div>
 
 <script>
 const USERS = {
@@ -5428,7 +5428,10 @@ function _renderUserList(){
   const allUsers=Object.entries(USERS);
   allUsers.forEach(([id,u])=>{
     const key=state.__users?.[id]?.plainKey||"";
-    const lt=state.__users?.[id]?.linkToken||"";
+    // After multi-project migration the authoritative linkToken lives on
+    // registry.users (shared across projects); state.__users may be empty
+    // in freshly-created projects. Fall back to registry for the link.
+    const lt=state.__users?.[id]?.linkToken||registry?.users?.[id]?.linkToken||"";
     const rc=getUserColor(id);
     html+=`<div class="user-card">`;
     html+=`<div class="user-card-top">`;
@@ -6153,7 +6156,7 @@ function changeUserRole(id,role){
   render();
 }
 function copyAuthLink(id){
-  const lt=state.__users?.[id]?.linkToken;
+  const lt=state.__users?.[id]?.linkToken||registry?.users?.[id]?.linkToken;
   if(!lt)return;
   const base='https://killhouse-vfx.contora.workers.dev/';
   const payload=btoa(id+'::'+lt);
