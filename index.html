@@ -296,15 +296,23 @@
   tbody tr { border-bottom: 4px solid #0d1117; transition: 0.1s; }
   tbody tr:hover { background: #1c2128; }
   tbody td { padding: 10px 14px; font-size: 14px; vertical-align: middle; }
-  .prio-tag { display: inline-block; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border: 1px solid #30363d; background: transparent; transition: .15s; }
+  .prio-tag { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border: 1px solid #30363d; background: transparent; transition: .15s; font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.55); line-height: 1; }
   .prio-tag:hover { border-color: #8b949e; }
   .prio-tag.prio-red { background: #f85149; border-color: #f85149; }
   .prio-tag.prio-yellow { background: #d29922; border-color: #d29922; }
   .prio-tag.prio-green { background: #3fb950; border-color: #3fb950; }
-  .prio-dropdown { position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 6px; z-index: 5000; display: flex; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .prio-tag.has-diff-only { color: #d29922; text-shadow: none; }
+  .prio-dropdown { position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 8px; z-index: 5000; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 0; }
+  .prio-dd-row { display: flex; gap: 6px; align-items: center; }
+  .prio-dd-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 4px; min-width: 58px; }
   .prio-dropdown .prio-opt { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: .1s; }
   .prio-dropdown .prio-opt:hover { transform: scale(1.2); }
   .prio-dropdown .prio-opt.sel { border-color: #fff; }
+  .prio-dd-row.diff { border-top: 1px solid #21262d; padding-top: 8px; gap: 3px; }
+  .diff-star { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; cursor: pointer; font-size: 13px; line-height: 1; color: #484f58; transition: .1s; user-select: none; }
+  .diff-star:hover { transform: scale(1.25); }
+  .diff-star.on { color: #d29922; }
+  .diff-star.clear { color: #8b949e; font-size: 12px; margin-left: 4px; }
   tr.row-prio-red { background: rgba(248,81,73,0.08) !important; }
   tr.row-prio-red:hover { background: rgba(248,81,73,0.15) !important; }
   tr.row-prio-yellow { background: rgba(210,153,34,0.08) !important; }
@@ -1105,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0132</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0133</div>
 
 <script>
 const USERS = {
@@ -4595,17 +4603,40 @@ function setPriority(id,val){
   if(!state[id])state[id]={};
   state[id].priority=val;
   saveState(state);
-  closePrioDropdown();
+  // Keep the dropdown open so the admin can also pick difficulty in one go;
+  // it closes on outside-click via _closePrioHandler.
   render();
+  const reopen=document.querySelector(`.prio-tag[data-shot-id="${id}"]`);
+  if(reopen&&document.getElementById('prioDropdown'))openPrioDropdown(id,reopen);
+}
+function getDifficulty(id){const v=state[id]?.difficulty;return Number.isInteger(v)&&v>=0&&v<=10?v:0;}
+function setDifficulty(id,val){
+  if(!isEditMode()||!canEditDifficulty())return;
+  const v=Math.max(0,Math.min(10,parseInt(val,10)||0));
+  if(!state[id])state[id]={};
+  if(v===0)delete state[id].difficulty;
+  else state[id].difficulty=v;
+  saveState(state);
+  render();
+  const reopen=document.querySelector(`.prio-tag[data-shot-id="${id}"]`);
+  if(reopen&&document.getElementById('prioDropdown'))openPrioDropdown(id,reopen);
 }
 function canEditPrio(){return isAdmin()||isClient();}
+function canEditDifficulty(){return isAdmin();}
 function openPrioDropdown(id,el){
   if(!isEditMode()||!canEditPrio())return;
   closePrioDropdown();
-  const cur=getPriority(id);
+  const curP=getPriority(id);
+  const curD=getDifficulty(id);
   const rect=el.getBoundingClientRect();
   const dd=document.createElement("div");
   dd.className="prio-dropdown";dd.id="prioDropdown";
+  // Row 1 — priority colour
+  const prioRow=document.createElement("div");
+  prioRow.className="prio-dd-row";
+  const prioLbl=document.createElement("div");
+  prioLbl.className="prio-dd-label";prioLbl.textContent="Priority";
+  prioRow.appendChild(prioLbl);
   const opts=[
     {val:"red",color:"#f85149"},
     {val:"yellow",color:"#d29922"},
@@ -4614,12 +4645,36 @@ function openPrioDropdown(id,el){
   ];
   opts.forEach(o=>{
     const d=document.createElement("div");
-    d.className="prio-opt"+(cur===o.val?" sel":"");
+    d.className="prio-opt"+(curP===o.val?" sel":"");
     d.style.background=o.color;
     if(o.border)d.style.border="2px solid "+o.border;
     d.onclick=(e)=>{e.stopPropagation();setPriority(id,o.val);};
-    dd.appendChild(d);
+    prioRow.appendChild(d);
   });
+  dd.appendChild(prioRow);
+  // Row 2 — difficulty (admin only)
+  if(canEditDifficulty()){
+    const diffRow=document.createElement("div");
+    diffRow.className="prio-dd-row diff";
+    const diffLbl=document.createElement("div");
+    diffLbl.className="prio-dd-label";diffLbl.textContent="Difficulty";
+    diffRow.appendChild(diffLbl);
+    for(let i=1;i<=10;i++){
+      const s=document.createElement("div");
+      s.className="diff-star"+(i<=curD?" on":"");
+      s.textContent="★";
+      s.title=i+"/10";
+      s.onclick=(e)=>{e.stopPropagation();setDifficulty(id,i===curD?0:i);};
+      diffRow.appendChild(s);
+    }
+    const clearBtn=document.createElement("div");
+    clearBtn.className="diff-star clear";
+    clearBtn.textContent="✕";
+    clearBtn.title="Clear difficulty";
+    clearBtn.onclick=(e)=>{e.stopPropagation();setDifficulty(id,0);};
+    diffRow.appendChild(clearBtn);
+    dd.appendChild(diffRow);
+  }
   dd.style.top=(rect.bottom+4)+"px";dd.style.left=rect.left+"px";
   document.body.appendChild(dd);
   setTimeout(()=>document.addEventListener("click",_closePrioHandler,{once:true}),0);
@@ -11566,8 +11621,10 @@ function render(){
       const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
       const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
       // [0]=prio [1]=# [2]=ID+preview [3]=shotInfo [4]=cat [5]=tcIn [6]=tcOut [7]=artist [8]=status [9]=admin [10]=chat
-      const prio=getPriority(r.id);const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
-      if(cells[0]){const box=cells[0].querySelector('.prio-tag');if(box)box.className=prioTagClass;}
+      const prio=getPriority(r.id);
+      const diff=getDifficulty(r.id);
+      const prioTagClass=(prio?'prio-tag prio-'+prio:'prio-tag')+(diff&&!prio?' has-diff-only':'');
+      if(cells[0]){const box=cells[0].querySelector('.prio-tag');if(box){box.className=prioTagClass;box.textContent=diff?String(diff):'';box.title=diff?`Difficulty ${diff}/10`:'';}}
       tr.className=prio?'row-prio-'+prio:'';
       tr.dataset.rowStatus=st;
       if(cells[3]&&!cells[3].querySelector('.si-edit'))cells[3].innerHTML=_renderShotInfo(r.id);
@@ -11588,13 +11645,15 @@ function _buildRow(r){
   const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
   const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
   const prio=getPriority(r.id);
-  const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
+  const diff=getDifficulty(r.id);
+  const prioTagClass=(prio?'prio-tag prio-'+prio:'prio-tag')+(diff&&!prio?' has-diff-only':'');
   const rowPrioClass=prio?'row-prio-'+prio:'';
   const _ep=canEditPrio()&&isEditMode();
   const prioClick=_ep?`onclick="event.stopPropagation();openPrioDropdown('${r.id}',this)"`:'';
   const prioStyle=_ep?'':'style="cursor:default"';
+  const prioTitle=diff?`title="Difficulty ${diff}/10"`:'';
   return `<tr class="${rowPrioClass}" data-row-status="${st}">
-    <td><div class="${prioTagClass}" ${prioClick} ${prioStyle}></div></td>
+    <td><div class="${prioTagClass}" data-shot-id="${r.id}" ${prioClick} ${prioStyle} ${prioTitle}>${diff?diff:''}</div></td>
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/${projectPath('thumbs/'+r.id+'.jpg')}" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="shot-info-cell" onmouseenter="showSiTooltip('${r.id}',event)" onmousemove="moveSiTooltip(event)" onmouseleave="hideSiTooltip()" onclick="event.stopPropagation();pinSiTooltip('${r.id}')" data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
