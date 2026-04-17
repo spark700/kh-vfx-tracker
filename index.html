@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0135</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0136</div>
 
 <script>
 const USERS = {
@@ -11628,7 +11628,13 @@ function render(){
   if(colFilters.artist) rows=rows.filter(r=>colFilters.artist.has(r.assignee||"__unassigned"));
   if(colFilters.status) rows=rows.filter(r=>colFilters.status.has(r.status));
   if(sortCol>=0){const keys=["idx","id","desc","cat","tcIn","tcOut","assignee","status"];const k=keys[sortCol];rows.sort((a,b)=>{let va=a[k],vb=b[k];if(typeof va==="string")va=va.toLowerCase();if(typeof vb==="string")vb=vb.toLowerCase();return va<vb?(sortAsc?-1:1):va>vb?(sortAsc?1:-1):0;});}
-  if(_prioSort){rows.sort((a,b)=>{const pa=_prioOrder[getPriority(a.id)]??3,pb=_prioOrder[getPriority(b.id)]??3;return pa-pb;});}
+  if(_prioSort){rows.sort((a,b)=>{
+    const pa=_prioOrder[getPriority(a.id)]??3,pb=_prioOrder[getPriority(b.id)]??3;
+    if(pa!==pb)return pa-pb;
+    // Secondary: within each priority colour, sort by difficulty descending
+    // (10-star shots float to the top of their colour group; unrated sinks).
+    return getDifficulty(b.id)-getDifficulty(a.id);
+  });}
 
   // Build row data for comparison
   const newIds=rows.map(r=>r.id).join(",");
