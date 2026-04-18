@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0139</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0140</div>
 
 <script>
 const USERS = {
@@ -1304,6 +1304,10 @@ function _setCurrentProject(pid){
   if(!state.__tasks)state.__tasks=[];
   if(!state.__categories)state.__categories={};
   TASKS=state.__tasks;
+  // Reset the analytics diff baseline — otherwise the next saveState
+  // diffs the new project's state against the old project's snapshot
+  // and fires fake "deleted" / "added" events for every shot.
+  try{if(typeof _analyticsLastSnapshot!=='undefined')_analyticsLastSnapshot=null;}catch(e){}
   // Re-point realtime at the new row
   try{_reconnectRealtime();}catch(e){}
 }
@@ -1837,12 +1841,17 @@ function _analyticsActor(){
 async function _logEvent(eventType,shotId,payload){
   try{
     const a=_analyticsActor();
+    // Stamp every event with the project it belongs to. The task_events
+    // table has no dedicated project_id column, so we pack it into the
+    // jsonb payload. Readers filter on payload.project_id; legacy rows
+    // without it are attributed to the "main" project (see _analyticsFetchEvents).
+    const pid=(typeof CURRENT_PROJECT_ID!=='undefined'&&CURRENT_PROJECT_ID)||LEGACY_PROJECT_ID;
     const body=JSON.stringify({
       shot_id:String(shotId),
       event_type:eventType,
       actor_id:a.id,
       actor_name:a.name,
-      payload:payload||{},
+      payload:{project_id:pid,...(payload||{})},
       source:"live",
       confidence:1.0
     });
@@ -1944,7 +1953,16 @@ async function _analyticsFetchEvents(){
     headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}
   });
   if(!r.ok)throw new Error("fetch task_events failed: "+await r.text());
-  return r.json();
+  const all=await r.json();
+  // Isolate to the current project. Legacy events (logged before the
+  // multi-project migration stamped payload.project_id) only count for
+  // the main project — the same place they were originally generated.
+  const pid=(typeof CURRENT_PROJECT_ID!=='undefined'&&CURRENT_PROJECT_ID)||LEGACY_PROJECT_ID;
+  return all.filter(e=>{
+    const ep=e&&e.payload&&e.payload.project_id;
+    if(pid===LEGACY_PROJECT_ID)return !ep||ep===LEGACY_PROJECT_ID;
+    return ep===pid;
+  });
 }
 
 function _analyticsGroupByShot(events){
@@ -4849,7 +4867,7 @@ async function _pushDownloadShareInternal(){
   const ids=window.__lastShareIds||[];
   const url=window.__lastShareUrl||'';
   if(!ids.length||!url)return;
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -4894,7 +4912,7 @@ async function _pushDownloadShareToClient(){
   const ids=window.__lastShareIds||[];
   const url=window.__lastShareUrl||'';
   if(!ids.length||!url)return;
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -4983,7 +5001,7 @@ async function _pingArtistFinalRequest(shotId){
   if(!shotId)return;
   const assignee=getAssignee(shotId);
   if(!assignee){alert('No artist assigned to '+shotId);return;}
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -5021,7 +5039,7 @@ async function _pingArtistFinalRequest(shotId){
 // final-request to each artist with the full list of their shots.
 async function _pingArtistFinalRequestBatch(){
   if(!isAdmin())return;
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   // Filter selection to red shots (status=done AND no final file)
@@ -6131,7 +6149,7 @@ function _saveBotSettings(){
   closeBotSettings();
 }
 async function _testBotPush(artistId){
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("No link token");return;
   }
   // Persist the currently selected dropdown value first so the worker
@@ -7662,7 +7680,7 @@ async function pushChatNotification(){
   if(!_canPushChat(noteTaskId)){alert("No permission");return;}
   const assignee=getAssignee(noteTaskId);
   if(!assignee){alert("No artist assigned");return;}
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   // Global admin debounce against accidental double clicks
@@ -7803,7 +7821,7 @@ async function pushPlayerNotification(){
   if(!_canPushChat(_gifCurrentId)){alert("No permission");return;}
   const assignee=getAssignee(_gifCurrentId);
   if(!assignee){alert("No artist assigned");return;}
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -7888,7 +7906,7 @@ function _pickClientChat(){
 async function pushPlayerToClient(){
   if(!_gifCurrentId)return;
   if(!isAdmin()){alert("Admin only");return;}
-  if(!currentUser||!state.__users||!_currentUserLinkToken()){
+  if(!currentUser||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
