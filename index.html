@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0143</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0144</div>
 
 <script>
 const USERS = {
@@ -8222,6 +8222,7 @@ function _initGifs(){
 }
 function hasGif(id){return GIFS.has(id);}
 function _pickCardPreviewUrl(id){
+  const _extractVNum=(nm)=>{const ne=(nm||"").replace(/\.[^.]+$/,"");const m=ne.match(/^(.+?)_prev_v(\d{3,4})$/i)||ne.match(/^(.+?)_v(\d{3,4})$/i);return m?parseInt(m[2],10):0;};
   // 1. Latest version from state.versions (uploaded via UI)
   const versions=state[id]?.versions||[];
   for(let i=versions.length-1;i>=0;i--){
@@ -8230,7 +8231,7 @@ function _pickCardPreviewUrl(id){
   // 2. Latest version from files['versions/preview'] (MCP uploads)
   const vFiles=state[id]?.files?.['versions/preview']||[];
   if(vFiles.length){
-    const sorted=vFiles.slice().sort((a,b)=>(_vNum(b.name)||0)-(_vNum(a.name)||0));
+    const sorted=vFiles.slice().sort((a,b)=>(_extractVNum(b.name)||0)-(_extractVNum(a.name)||0));
     if(sorted[0]?.url)return sorted[0].url;
     if(sorted[0]?.r2key)return CDN_BASE+'/'+sorted[0].r2key;
   }
@@ -9352,11 +9353,17 @@ function _resolveFilesPath(id){
   let items=_getFilesRoot(id);
   let breadcrumb=id==='__admin'?'admin':(id==='__myfiles'?'My Files':(id==='__doneshots'?'Done Shots':id));
   let currentFolder=null;
+  let validDepth=0;
   for(const p of _filesPath){
     const folder=items.find(f=>f.name===p&&f.type==='folder');
-    if(folder){currentFolder=folder;items=folder.children||[];breadcrumb+=" / "+p;}
+    if(folder){currentFolder=folder;items=folder.children||[];breadcrumb+=" / "+p;validDepth++;}
     else break;
   }
+  // Trim stale segments so a subsequent push() starts from a real level.
+  // Without this, switching between shots/my-files leaves orphaned parts
+  // of the previous path in _filesPath, and double-clicking a folder
+  // appears to do nothing (push grows a path that never resolves).
+  if(validDepth<_filesPath.length)_filesPath.length=validDepth;
   return {items,breadcrumb,currentFolder};
 }
 // === Multi-select state ===
