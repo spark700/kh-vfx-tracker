@@ -1135,6 +1135,28 @@ var SESSION_ID=(function(){
   try{var s=sessionStorage.getItem('session_id');if(!s){s=Math.random().toString(36).slice(2,14);sessionStorage.setItem('session_id',s);}return s;}
   catch(e){return Math.random().toString(36).slice(2,14);}
 })();
+/* ── Feature flags (Phase 0-4 rollout gate) — polled every 30 s from CF KV ──
+   Worker endpoint GET /flags returns the full flag map.  Flags are strictly
+   additive: each phase has `default`, `allow_users`, `allow_devices`.
+   `isFlagOn(name)` is a pure function — safe to call before currentUser
+   exists (returns false in that case).  Used wiring lands in Phase 0. */
+var FLAGS={};
+async function _pollFlags(){
+  try{
+    var r=await fetch('https://contora.net/flags',{cache:'no-cache'});
+    if(r.ok) FLAGS=await r.json();
+  }catch(e){}
+}
+function _flagUserId(){try{return (currentUser&&currentUser.id)||null;}catch(e){return null;}}
+function isFlagOn(name){
+  var f=FLAGS[name]; if(!f) return false;
+  var uid=_flagUserId();
+  if(uid && f.allow_users && f.allow_users.indexOf(uid)!==-1) return true;
+  if(f.allow_devices && f.allow_devices.indexOf(DEVICE_ID)!==-1) return true;
+  return !!f.default;
+}
+setInterval(_pollFlags,30000);
+_pollFlags();
 async function sha256(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");}
 let currentUser=null;
 function _persistUser(id){try{localStorage.setItem("kh_user",id);}catch(e){}try{sessionStorage.setItem("kh_user",id);}catch(e){}}
