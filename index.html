@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0150</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0151</div>
 
 <script>
 const USERS = {
@@ -4609,7 +4609,11 @@ async function _pullRemote(){
     _lastSentProjectId=pePid;
 
     const remote=composeProjectState(all,pePid);
-    if(JSON.stringify(remote)===JSON.stringify(state))return false;
+    // Canonical-JSON compare: Postgres JSONB sorts keys, client doesn't, so
+    // JSON.stringify could differ on identical content and falsely fire a
+    // re-render (reloading every <video> preview).  _canonicalJSON sorts
+    // keys recursively, making the compare content-accurate.
+    if(_canonicalJSON(remote)===_canonicalJSON(state))return false;
     const localRead=state&&state.__readState&&currentUser?state.__readState[currentUser.id]:null;
     state=remote;
     if(localRead&&currentUser){if(!state.__readState)state.__readState={};state.__readState[currentUser.id]=localRead;}
