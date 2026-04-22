@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0146</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0147</div>
 
 <script>
 const USERS = {
@@ -4180,13 +4180,85 @@ function saveState(s){
   });
 }
 
+/* ── Per-entity diff writes (v4.1) ────────────────────────────────────────
+   Instead of sending every entity on every save, track the last-sent hash
+   per (entity_type, entity_id) and only POST rows that actually changed.
+   Deletes (rows present last time but absent now) go through REST DELETE.
+
+   - _lastSentRows / _lastSentRegistry: Map<"type/id", payloadHash>
+   - _lastSentProjectId: tracks project switches (baseline reset on change)
+
+   Baseline is refreshed in _pullRemote / _pullRegistry from the freshly
+   fetched PE rows; so after realtime-driven pull, next local save diffs
+   against the remote truth.
+
+   Hash covers parent_type + parent_id + payload — a parent re-assignment
+   still triggers an UPDATE, matching the server-side no-op guard. */
+let _lastSentRows = new Map();
+let _lastSentRegistry = new Map();
+let _lastSentProjectId = null;
+function _canonicalJSON(x){
+  if(x===null||typeof x!=='object') return JSON.stringify(x);
+  if(Array.isArray(x)) return '['+x.map(_canonicalJSON).join(',')+']';
+  const keys=Object.keys(x).sort();
+  return '{'+keys.map(k=>JSON.stringify(k)+':'+_canonicalJSON(x[k])).join(',')+'}';
+}
+function _entityKey(e){ return e.entity_type+'/'+e.entity_id; }
+function _hashEntityRow(e){
+  return md5(_canonicalJSON({
+    pt: e.parent_type===undefined?null:e.parent_type,
+    pi: e.parent_id===undefined?null:e.parent_id,
+    pl: e.payload===undefined?null:e.payload,
+  }));
+}
+function _buildEntityIndex(entitiesOrRows){
+  const m=new Map();
+  for(const e of (entitiesOrRows||[])) m.set(_entityKey(e), _hashEntityRow(e));
+  return m;
+}
+function _diffEntities(newIdx, oldIdx, newEntities){
+  const upserts=[], deletes=[];
+  const nextByKey=new Map();
+  for(const e of newEntities) nextByKey.set(_entityKey(e), e);
+  for(const[k,h]of newIdx){
+    const prev=oldIdx.get(k);
+    if(prev!==h) upserts.push(nextByKey.get(k));
+  }
+  for(const k of oldIdx.keys()){
+    if(!newIdx.has(k)){
+      const idx=k.indexOf('/');
+      deletes.push({ entity_type: k.slice(0,idx), entity_id: k.slice(idx+1) });
+    }
+  }
+  return { upserts, deletes };
+}
+async function _deleteEntityRows(pePid, deletes){
+  if(!deletes.length) return true;
+  // Parallel single-row DELETEs — fan-out is bounded by the typical number
+  // of removals per save (rarely more than a handful).  PostgREST doesn't
+  // support a batched multi-row DELETE-by-composite-key natively.
+  const results = await Promise.all(deletes.map(d => fetch(
+    SUPA_URL+"/rest/v1/project_entities?project_id=eq."+encodeURIComponent(pePid)+
+    "&entity_type=eq."+encodeURIComponent(d.entity_type)+
+    "&entity_id=eq."+encodeURIComponent(d.entity_id),
+    { method:"DELETE", headers:{...SUPA_HEADERS} }
+  ).catch(e=>({ok:false,error:String(e)}))));
+  return results.every(r => r && r.ok);
+}
+
 async function _pushRemote(s){
-  // Post-cutover: only path is project_entities via batch_dual_write.
-  // Retry once on transport failure; show scoped "Conflict — please reload"
-  // if any row returns conflict=true (shouldn't happen under upsert-style
-  // version_in=null, but defensive).
+  // Post-cutover v4.1: decompose + diff against last-sent baseline, then
+  // POST only the changed rows to batch_dual_write and DELETE the rows
+  // that disappeared.  Typical edit ships 1-2 rows instead of 550.
   const _rowId=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
   const pePid=_rowId==='__registry'?'_registry':_rowId;
+
+  // Reset baseline on project switch — last-sent map is per-project.
+  if(_lastSentProjectId!==pePid){
+    _lastSentRows=new Map();
+    _lastSentProjectId=pePid;
+  }
+
   let entities;
   try{
     entities=decomposeProjectState(pePid,s);
@@ -4197,7 +4269,19 @@ async function _pushRemote(s){
       setTimeout(()=>{n.classList.remove("show");n.style.background="";},3000);}
     return;
   }
-  const rows=entities.map(function(e){
+
+  const newIdx=_buildEntityIndex(entities);
+  const diff=_diffEntities(newIdx,_lastSentRows,entities);
+
+  if(!diff.upserts.length && !diff.deletes.length){
+    // Nothing changed since the last successful send — don't hit the network.
+    const n=document.getElementById("saveNotice");
+    if(n){n.textContent="Saved";n.style.background="#1f6feb";
+      setTimeout(()=>n.classList.remove("show"),1200);}
+    return;
+  }
+
+  const rows=diff.upserts.map(function(e){
     return {
       project_id:  pePid,
       entity_type: e.entity_type,
@@ -4210,6 +4294,7 @@ async function _pushRemote(s){
       user_id:     (currentUser && currentUser.id) || 'anon',
     };
   });
+
   async function _attempt(){
     return await fetch(SUPA_URL+"/rest/v1/rpc/batch_dual_write",{
       method:"POST",
@@ -4217,41 +4302,57 @@ async function _pushRemote(s){
       body:JSON.stringify({p_rows:rows})
     });
   }
-  let resp;
-  try{
-    resp=await _attempt();
-    if(!resp.ok){
-      await new Promise(r=>setTimeout(r,500));
-      resp=await _attempt();
-    }
-  }catch(e){
-    try{await new Promise(r=>setTimeout(r,500)); resp=await _attempt();}catch(e2){resp=null;}
-  }
-  if(!resp||!resp.ok){
-    const n=document.getElementById("saveNotice");
-    if(n){n.textContent="Save failed — check connection";n.style.background="#f85149";
-      setTimeout(()=>{n.classList.remove("show");n.style.background="";},4000);}
-    if(typeof _showAlert==='function')_showAlert('Save failed','Could not save your change.  Check your connection and retry; if the problem persists, open DevTools Network to see the error.');
-    return;
-  }
-  // Parse response and look for conflicts.  With version_in=null these are rare.
-  try{
-    const body=await resp.json();
-    if(Array.isArray(body)){
-      const conf=body.filter(x=>x && x.conflict===true);
-      if(conf.length){
-        const n=document.getElementById("saveNotice");
-        if(n){n.textContent="⚠ Conflict — please reload";n.style.background="#d29922";
-          setTimeout(()=>{n.classList.remove("show");n.style.background="";},6000);}
-        if(typeof _showAlert==='function'){
-          _showAlert('Sync conflict','Another device saved changes while you were editing.<br><br>Please reload the page.');
-        }
-        return;
+
+  let upsertResp=null;
+  if(rows.length){
+    try{
+      upsertResp=await _attempt();
+      if(!upsertResp.ok){
+        await new Promise(r=>setTimeout(r,500));
+        upsertResp=await _attempt();
       }
+    }catch(e){
+      try{ await new Promise(r=>setTimeout(r,500)); upsertResp=await _attempt(); }catch(e2){ upsertResp=null; }
     }
-  }catch(e){/* body parse non-fatal */}
+    if(!upsertResp||!upsertResp.ok){
+      const n=document.getElementById("saveNotice");
+      if(n){n.textContent="Save failed — check connection";n.style.background="#f85149";
+        setTimeout(()=>{n.classList.remove("show");n.style.background="";},4000);}
+      if(typeof _showAlert==='function')_showAlert('Save failed','Could not save your change.  Check your connection and retry.');
+      // Baseline stays on old state — next save re-attempts the delta.
+      return;
+    }
+    try{
+      const body=await upsertResp.json();
+      if(Array.isArray(body)){
+        const conf=body.filter(x=>x && x.conflict===true);
+        if(conf.length){
+          const n=document.getElementById("saveNotice");
+          if(n){n.textContent="⚠ Conflict — please reload";n.style.background="#d29922";
+            setTimeout(()=>{n.classList.remove("show");n.style.background="";},6000);}
+          if(typeof _showAlert==='function')_showAlert('Sync conflict','Another device saved changes while you were editing.<br><br>Please reload the page.');
+          return;
+        }
+      }
+    }catch(e){/* body parse non-fatal */}
+  }
+
+  if(diff.deletes.length){
+    const ok=await _deleteEntityRows(pePid,diff.deletes);
+    if(!ok){
+      // Partial success: upserts committed, deletes may have failed.
+      // Do NOT advance the baseline — next save retries the pending deletes.
+      const n=document.getElementById("saveNotice");
+      if(n){n.textContent="Saved (cleanup retry pending)";n.style.background="#d29922";
+        setTimeout(()=>{n.classList.remove("show");n.style.background="";},3000);}
+      return;
+    }
+  }
+
+  // Full success — baseline advances to the current snapshot.
+  _lastSentRows=newIdx;
   const n=document.getElementById("saveNotice");
-  if(n){n.textContent="Saved";n.style.background="#1f6feb";
+  if(n){n.textContent="Saved ("+rows.length+"↑ "+diff.deletes.length+"✖)";n.style.background="#1f6feb";
     setTimeout(()=>n.classList.remove("show"),1200);}
 }
 
@@ -4275,8 +4376,6 @@ function _normalizeRegistry(raw){
   };
 }
 async function _pullRegistry(){
-  // Post-cutover: read from project_entities + compose.
-  // __registry -> _registry (plan §4.4 sentinel rename).
   try{
     const pePid="_registry";
     let all=[]; let from=0; const page=1000;
@@ -4292,6 +4391,10 @@ async function _pullRegistry(){
       from=to+1;
     }
     if(!all.length)return null;  // not yet populated — bootstrap path
+
+    // v4.1 baseline refresh for diff-based _pushRegistry.
+    _lastSentRegistry=_buildEntityIndex(all);
+
     const data=composeProjectState(all,pePid);
     registry=_normalizeRegistry(data);
     if(registry.users){for(const[uid,u]of Object.entries(registry.users)){USERS[uid]=u;}}
@@ -4303,10 +4406,14 @@ async function _pushRegistry(){
   if(_savingRegistry){_pendingRegistrySave=true;return;}
   _savingRegistry=true;
   try{
-    // Post-cutover: decompose registry -> batch_dual_write.
     const pePid="_registry";
     const entities=decomposeProjectState(pePid,registry);
-    const rows=entities.map(function(e){
+    const newIdx=_buildEntityIndex(entities);
+    const diff=_diffEntities(newIdx,_lastSentRegistry,entities);
+    if(!diff.upserts.length && !diff.deletes.length){
+      return;
+    }
+    const rows=diff.upserts.map(function(e){
       return {
         project_id:  pePid,
         entity_type: e.entity_type,
@@ -4319,17 +4426,27 @@ async function _pushRegistry(){
         user_id:     (currentUser && currentUser.id) || 'anon',
       };
     });
-    const r=await fetch(SUPA_URL+"/rest/v1/rpc/batch_dual_write",{
-      method:"POST",
-      headers:{...SUPA_HEADERS,"Content-Type":"application/json","Prefer":"params=single-object"},
-      body:JSON.stringify({p_rows:rows})
-    });
-    if(!r.ok){
-      const t=await r.text();
-      console.error("Registry dual-write failed:",r.status,t);
-      if(typeof _showAlert==='function')_showAlert('Registry save failed','Could not persist the project list ('+r.status+'). Check your connection and retry.');
-      return;
+    if(rows.length){
+      const r=await fetch(SUPA_URL+"/rest/v1/rpc/batch_dual_write",{
+        method:"POST",
+        headers:{...SUPA_HEADERS,"Content-Type":"application/json","Prefer":"params=single-object"},
+        body:JSON.stringify({p_rows:rows})
+      });
+      if(!r.ok){
+        const t=await r.text();
+        console.error("Registry dual-write failed:",r.status,t);
+        if(typeof _showAlert==='function')_showAlert('Registry save failed','Could not persist the project list ('+r.status+'). Check your connection and retry.');
+        return;
+      }
     }
+    if(diff.deletes.length){
+      const ok=await _deleteEntityRows(pePid,diff.deletes);
+      if(!ok){
+        console.warn('Registry delete batch had failures — baseline not advanced');
+        return;
+      }
+    }
+    _lastSentRegistry=newIdx;
   }catch(e){console.error("Registry push failed:",e);}
   finally{
     _savingRegistry=false;
@@ -4390,10 +4507,9 @@ function _onRegistryChanged(){
 // ═══════════════════════════════════════════════════════════════════════
 
 async function _pullRemote(){
-  // Post-cutover: read project_entities for the current project and compose
-  // the equivalent state blob in memory.  Readers (render(),
-  // renderChat() etc.) keep operating on the same `state` shape so the
-  // change stays local to this function.
+  // v4.1: on successful pull, refresh _lastSentRows baseline so subsequent
+  // diffs are computed against the remote truth.  This keeps the per-entity
+  // diff aligned with anyone else's changes delivered via realtime.
   try{
     const _rowId=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
     const pePid=_rowId==='__registry'?'_registry':_rowId;
@@ -4409,7 +4525,13 @@ async function _pullRemote(){
       if(rows.length<page)break;
       from=to+1;
     }
-    if(!all.length)return false;
+    if(!all.length) return false;
+
+    // Baseline refresh regardless of whether the composed blob differs
+    // locally — remote is authoritative for diff computation.
+    _lastSentRows=_buildEntityIndex(all);
+    _lastSentProjectId=pePid;
+
     const remote=composeProjectState(all,pePid);
     if(JSON.stringify(remote)===JSON.stringify(state))return false;
     const localRead=state&&state.__readState&&currentUser?state.__readState[currentUser.id]:null;
