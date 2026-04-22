@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0148</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0149</div>
 
 <script>
 const USERS = {
@@ -1929,10 +1929,23 @@ async function switchProject(pid){
   _setCurrentProject(pid);
   _closeProjectPicker();
   try{if(typeof _renderProjectBadge==='function')_renderProjectBadge();}catch(e){}
+  // Immediate placeholder render — gives user instant feedback that the
+  // switch happened; body will be replaced once the pull completes.
   render();
   const pulled=await _pullRemote();if(pulled)runMigrations();
-  render();
+  // Rebuild the GIFS set against the NEW project's state BEFORE rendering,
+  // otherwise hasGif() still returns the old project's set and every row
+  // falls into the `<div class="gif-none">—</div>` branch → no video
+  // preview appears on the switched project until you reload.
   try{if(typeof _initGifs==='function')_initGifs();}catch(e){}
+  render();
+  // Sync the URL to the new project so a reload doesn't kick the user back
+  // to whatever was in the address bar before the switch.  All projects
+  // are equal — the URL segment IS the project id.
+  try{
+    const newPath='/vfx-tracker/'+encodeURIComponent(pid)+'/';
+    if(location.pathname!==newPath) history.replaceState(null,'',newPath);
+  }catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2043,7 +2056,10 @@ async function _prefetchTgBotInfo(){
       if(!state.__bot.topicNames)state.__bot.topicNames={};
       for(const k of Object.keys(d.topicNames))state.__bot.topicNames[k]=d.topicNames[k];
     }
-    saveState(state);
+    // NOTE: no saveState() here.  The worker handleTgPing already wrote the
+    // same meta/__bot row to project_entities via _writeStateData.  Saving
+    // again from the client duplicated the write (and bumped the row
+    // version on every page load with a phantom "Saved" notice).
   }catch(e){/* silent */}
 }
 
@@ -4334,10 +4350,11 @@ async function _pushRemote(s){
   const diff=_diffEntities(newIdx,_lastSentRows,entities);
 
   if(!diff.upserts.length && !diff.deletes.length){
-    // Nothing changed since the last successful send — don't hit the network.
+    // Nothing changed since the last successful send — exit silently.
+    // Previously we still flashed "Saved" here, which looked like an
+    // autosave even though no network write happened.
     const n=document.getElementById("saveNotice");
-    if(n){n.textContent="Saved";n.style.background="#1f6feb";
-      setTimeout(()=>n.classList.remove("show"),1200);}
+    if(n){n.classList.remove("show");n.textContent="";n.style.background="";}
     return;
   }
 
