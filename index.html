@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0151</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0152</div>
 
 <script>
 const USERS = {
@@ -8996,6 +8996,17 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!document.getEle
 
 const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
 const GIFS=new Set();
+let _gifBackfillRenderTimer=null;
+function _scheduleGifBackfillRender(){
+  // Coalesce multiple thumb img.onload callbacks so we render once after
+  // the burst settles, not N times.  250ms is enough to collect all
+  // in-flight thumbs loading in parallel from the R2 CDN.
+  if(_gifBackfillRenderTimer) return;
+  _gifBackfillRenderTimer=setTimeout(()=>{
+    _gifBackfillRenderTimer=null;
+    try{render();}catch(e){}
+  },250);
+}
 function _initGifs(){
   GIFS.clear();
   for(const t of TASKS){
@@ -9003,11 +9014,18 @@ function _initGifs(){
     else if(state[t.id]?.files?.['versions/preview']?.length)GIFS.add(t.id);
     else if(state[t.id]?.versions?.length)GIFS.add(t.id);
   }
-  // Legacy: check thumbs existence for shots without state entry
+  // Legacy: check thumbs existence for shots without state entry.  One
+  // shared debounced render picks up every successful thumb load.
   for(const t of TASKS){
     if(!GIFS.has(t.id)){
       const img=new Image();img.src=CDN_BASE+'/'+projectPath('thumbs/'+t.id+'.jpg');
-      img.onload=()=>{GIFS.add(t.id);const tbody=document.getElementById("tbody");if(tbody){tbody.dataset.ids="";render();}};
+      img.onload=()=>{
+        GIFS.add(t.id);
+        const tbody=document.getElementById("tbody");
+        if(!tbody)return;
+        tbody.dataset.ids="";
+        _scheduleGifBackfillRender();
+      };
     }
   }
 }
