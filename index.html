@@ -1122,6 +1122,19 @@ const USERS = {
   igor:   { hash: "63669fcc68f8066547cd0752ed9d8be28638ad3a45e0d2bf24b67218f7a26c23", display: "Igor",   role: "artist" },
   client: { hash: "9a5d23f351880fae8006cc830bbdd30c19acd6ed5464bef860583205fd62d6ec", display: "Client", role: "client" },
 };
+/* ── Pre-Phase-0: stable device + per-tab session identifiers ──
+   DEVICE_ID persists across tabs/reloads in localStorage (UUID v4).
+   SESSION_ID is fresh per tab, used later by the Phase-0 Store module
+   for echo suppression in Supabase Realtime (REFACTOR_PLAN.md §6.2).
+   `var` on purpose: classic inline script, top-level must reach window. */
+var DEVICE_ID=(function(){
+  try{var d=localStorage.getItem('device_id');if(!d){d=crypto.randomUUID();localStorage.setItem('device_id',d);}return d;}
+  catch(e){return crypto.randomUUID();}
+})();
+var SESSION_ID=(function(){
+  try{var s=sessionStorage.getItem('session_id');if(!s){s=Math.random().toString(36).slice(2,14);sessionStorage.setItem('session_id',s);}return s;}
+  catch(e){return Math.random().toString(36).slice(2,14);}
+})();
 async function sha256(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");}
 let currentUser=null;
 function _persistUser(id){try{localStorage.setItem("kh_user",id);}catch(e){}try{sessionStorage.setItem("kh_user",id);}catch(e){}}
