@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0147</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0148</div>
 
 <script>
 const USERS = {
@@ -4179,6 +4179,66 @@ function saveState(s){
     if(_pendingSave){_pendingSave=false;saveState(state);}
   });
 }
+
+/* ── Lazy video thumbnails (v1.0.0148 crash fix) ──────────────────────────
+   Table rows (and the done-shots tracker) render one <video> per shot as a
+   preview.  With 28 shots and render() firing several times during init
+   (loadState → _pullRegistry → _pullRemote → _autoPromoteDelivered → bot
+   handshake → realtime echo), we used to allocate ~140 concurrent video
+   decoder sessions.  Chrome renderer ran out of GPU memory and died with
+   STATUS_ACCESS_VIOLATION ("Опаньки / Aw Snap, код 5").
+   The video tags now ship preload="none" + data-src; an IntersectionObserver
+   wires the real src only when the element is ≤300 px from viewport and
+   releases it (removeAttribute+load) when it scrolls out.  A MutationObserver
+   picks up fresh <video data-src> elements so render() doesn't need to opt
+   in explicitly.  Hover (thumbPreviewStart) force-loads as a fallback. */
+(function(){
+  if(typeof IntersectionObserver==='undefined') return;
+  const io=new IntersectionObserver(function(entries){
+    for(const e of entries){
+      const v=e.target;
+      if(e.isIntersecting){
+        if(!v.getAttribute('src') && v.dataset && v.dataset.src){
+          v.preload='metadata';
+          v.src=v.dataset.src;
+        }
+      } else {
+        if(v.getAttribute('src')){
+          v.removeAttribute('src');
+          try{v.load();}catch(err){/* detach decoder */}
+        }
+      }
+    }
+  }, { rootMargin:'300px 0px', threshold:0 });
+  function _lazyVideoSelector(el){
+    return el && el.matches && el.matches('video[data-src]');
+  }
+  function _scan(root){
+    (root||document).querySelectorAll('video[data-src]').forEach(function(v){ io.observe(v); });
+  }
+  function _start(){
+    _scan(document);
+    const mo=new MutationObserver(function(muts){
+      for(const m of muts){
+        for(const node of m.addedNodes){
+          if(node.nodeType!==1) continue;
+          if(_lazyVideoSelector(node)){
+            io.observe(node);
+          } else if(node.querySelectorAll){
+            const list=node.querySelectorAll('video[data-src]');
+            for(let i=0;i<list.length;i++) io.observe(list[i]);
+          }
+        }
+      }
+    });
+    mo.observe(document.body,{ childList:true, subtree:true });
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',_start);
+  } else {
+    _start();
+  }
+})();
 
 /* ── Per-entity diff writes (v4.1) ────────────────────────────────────────
    Instead of sending every entity on every save, track the last-sent hash
@@ -8956,6 +9016,12 @@ function _pickCardPreviewUrl(id){
 function thumbPreviewStart(wrap,id){
   const vid=wrap.querySelector('video');
   if(!vid)return;
+  // Post-crash-fix (v1.0.0148): videos are lazy by default; force the src
+  // in case hover lands on one that hasn't scrolled into viewport yet.
+  if(!vid.getAttribute('src') && vid.dataset && vid.dataset.src){
+    vid.preload='metadata';
+    vid.src=vid.dataset.src;
+  }
   vid.loop=true;
   vid.play().catch(()=>{});
   const icon=wrap.querySelector('.gif-play-icon');
@@ -10839,7 +10905,7 @@ function _dsHoverShow(shotId,e,borderColor){
   wrap.style.borderColor=col;
   wrap.style.boxShadow='0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px '+col+'33';
   if(info){
-    wrap.innerHTML=`<video muted loop playsinline preload="auto" src="${esc(info.url)}"></video><div class="dshp-label"><span class="dshp-id" style="color:${col}">${esc(shotId)}</span><span>${esc(info.label)}</span></div><div class="dshp-loading">Loading…</div>`;
+    wrap.innerHTML=`<video class="dshp-thumb" muted loop playsinline preload="none" data-src="${esc(info.url)}"></video><div class="dshp-label"><span class="dshp-id" style="color:${col}">${esc(shotId)}</span><span>${esc(info.label)}</span></div><div class="dshp-loading">Loading…</div>`;
   } else {
     wrap.innerHTML=`<div style="width:320px;height:180px;display:flex;align-items:center;justify-content:center;color:#8b949e;font-size:12px">No preview available</div><div class="dshp-label"><span class="dshp-id" style="color:${col}">${esc(shotId)}</span></div>`;
   }
@@ -12541,7 +12607,7 @@ function _buildRow(r){
   return `<tr class="${rowPrioClass}" data-row-status="${st}">
     <td><div class="${prioTagClass}" data-shot-id="${r.id}" ${prioClick} ${prioStyle} ${prioTitle}>${diff?diff:''}</div></td>
     <td style="color:#484f58">${r.idx}</td>
-    <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><video class="gif-thumb" src="${_pickCardPreviewUrl(r.id)}" muted playsinline preload="metadata" onloadedmetadata="this.currentTime=0.01"></video><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
+    <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><video class="gif-thumb" data-src="${_pickCardPreviewUrl(r.id)}" muted playsinline preload="none" onloadedmetadata="this.currentTime=0.01"></video><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="shot-info-cell" onmouseenter="showSiTooltip('${r.id}',event)" onmousemove="moveSiTooltip(event)" onmouseleave="hideSiTooltip()" onclick="event.stopPropagation();pinSiTooltip('${r.id}')" data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
     <td class="category-cell">${isAdmin()&&isEditMode()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
     <td class="tc-cell">${r.tcIn}</td>
