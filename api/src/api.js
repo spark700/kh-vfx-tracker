@@ -512,8 +512,7 @@ async function _processTelegramUpdate(env, stateData, update, ctx) {
   function _captureChat(c) {
     if (!c || !c.id) return;
     const id = String(c.id);
-    if (tgChatsMap[id]) return;
-    tgChatsMap[id] = {
+    const next = {
       id: c.id,
       type: c.type || null,
       title: c.title || null,
@@ -521,9 +520,33 @@ async function _processTelegramUpdate(env, stateData, update, ctx) {
       username: c.username || null,
       first_name: c.first_name || null
     };
+    const prev = tgChatsMap[id];
+    if (prev && prev.type === next.type && prev.title === next.title
+        && prev.is_forum === next.is_forum && prev.username === next.username
+        && prev.first_name === next.first_name) return;
+    tgChatsMap[id] = next;
     dirty = true;
   }
   __name(_captureChat, "_captureChat");
+  function _removeChat(c) {
+    if (!c || !c.id) return;
+    const id = String(c.id);
+    if (!tgChatsMap[id]) return;
+    delete tgChatsMap[id];
+    dirty = true;
+  }
+  __name(_removeChat, "_removeChat");
+  // my_chat_member tracks the bot's own membership transitions. If the bot
+  // was just kicked / left / banned, drop the chat from the cache so the
+  // "Bot is in" list stays accurate.
+  if (update.my_chat_member && update.my_chat_member.chat) {
+    const newStatus = update.my_chat_member.new_chat_member?.status;
+    if (newStatus === "left" || newStatus === "kicked" || newStatus === "banned") {
+      _removeChat(update.my_chat_member.chat);
+    } else {
+      _captureChat(update.my_chat_member.chat);
+    }
+  }
   function _captureUser(u) {
     if (!u || !u.id || u.is_bot) return;
     const id = String(u.id);
@@ -538,7 +561,6 @@ async function _processTelegramUpdate(env, stateData, update, ctx) {
     dirty = true;
   }
   __name(_captureUser, "_captureUser");
-  if (update.my_chat_member && update.my_chat_member.chat) _captureChat(update.my_chat_member.chat);
   if (update.chat_member && update.chat_member.chat) _captureChat(update.chat_member.chat);
   const m = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
   if (m) {
@@ -549,22 +571,36 @@ async function _processTelegramUpdate(env, stateData, update, ctx) {
     for (const ent of entities) {
       if (ent.type === "text_mention" && ent.user) _captureUser(ent.user);
     }
-    if (m.forum_topic_created && m.message_thread_id) {
+    function _recordTopic(threadId, name) {
+      if (!threadId) return;
       if (!stateData.__bot) stateData.__bot = {};
       if (!stateData.__bot.topicNames) stateData.__bot.topicNames = {};
-      if (stateData.__bot.topicNames[m.message_thread_id] !== m.forum_topic_created.name) {
-        stateData.__bot.topicNames[m.message_thread_id] = m.forum_topic_created.name;
-        dirty = true;
-      }
+      const cur = stateData.__bot.topicNames[threadId];
+      // Bot API can't enumerate topics — if we never caught forum_topic_created
+      // we fall back to a "Topic <id>" placeholder so the topic at least shows
+      // up in the admin dropdown. A real name (from forum_topic_created /
+      // forum_topic_edited) always overrides the placeholder.
+      const placeholder = `Topic ${threadId}`;
+      const next = name || placeholder;
+      const curIsPlaceholder = !cur || cur === `Topic ${threadId}`;
+      if (cur === next) return;
+      if (!name && !curIsPlaceholder) return; // don't overwrite a real name with a placeholder
+      stateData.__bot.topicNames[threadId] = next;
+      dirty = true;
+    }
+    __name(_recordTopic, "_recordTopic");
+    if (m.message_thread_id) {
+      const name = (m.forum_topic_created && m.forum_topic_created.name)
+        || (m.forum_topic_edited && m.forum_topic_edited.name)
+        || null;
+      _recordTopic(m.message_thread_id, name);
     }
     const rt = m.reply_to_message;
-    if (rt && rt.forum_topic_created && rt.message_thread_id) {
-      if (!stateData.__bot) stateData.__bot = {};
-      if (!stateData.__bot.topicNames) stateData.__bot.topicNames = {};
-      if (stateData.__bot.topicNames[rt.message_thread_id] !== rt.forum_topic_created.name) {
-        stateData.__bot.topicNames[rt.message_thread_id] = rt.forum_topic_created.name;
-        dirty = true;
-      }
+    if (rt && rt.message_thread_id) {
+      const name = (rt.forum_topic_created && rt.forum_topic_created.name)
+        || (rt.forum_topic_edited && rt.forum_topic_edited.name)
+        || null;
+      _recordTopic(rt.message_thread_id, name);
     }
     if (m.text && m.text.indexOf("/start dl_") === 0 && m.from) {
       const dlToken = m.text.substring("/start dl_".length).trim();
@@ -770,13 +806,24 @@ async function handleTgPing(request, env) {
     }
   } catch (e) {
   }
-  const topicNames = {};
+  // Seed topic names from cached state so the frontend gets a "live" view on
+  // every ping (handleTgPing itself doesn't discover topics — that happens in
+  // the webhook). Any names recorded later in this call still win.
+  const topicNames = { ...(stateData?.__bot?.topicNames || {}) };
   const tgUsersMap = {};
+  // Seed known chats from cached state (the webhook discovers them as the bot
+  // receives messages). Without this seed, every /tg/ping call would overwrite
+  // knownChats with just the hardcoded TG_CHAT_ID and the "Bot is in" list
+  // would lose every other chat.
   const tgChatsMap = {};
+  for (const c of stateData?.__bot?.knownChats || []) {
+    if (c && c.id != null) tgChatsMap[String(c.id)] = c;
+  }
   function _captureChat(c) {
     if (!c || !c.id) return;
-    if (tgChatsMap[c.id]) return;
-    tgChatsMap[c.id] = {
+    // Merge fresh fields into any pre-seeded cache entry so titles, forum flag,
+    // username etc stay current when getChat returns updated info.
+    tgChatsMap[String(c.id)] = {
       id: c.id,
       type: c.type || null,
       title: c.title || null,
@@ -799,15 +846,27 @@ async function handleTgPing(request, env) {
     };
   }
   __name(_captureUser, "_captureUser");
+  // Refresh getChat for the hardcoded chat plus every chat already cached, so
+  // titles/forum-flag stay current and chats the bot was kicked from get
+  // pruned. Without this, knownChats grows forever and never picks up renames.
+  const refreshChatIds = new Set([String(TG_CHAT_ID), ...Object.keys(tgChatsMap)]);
   if (hasToken) {
-    try {
-      const ccr = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${encodeURIComponent(TG_CHAT_ID)}`);
-      const ccj = await ccr.json();
-      if (ccj && ccj.ok && ccj.result) _captureChat(ccj.result);
-    } catch (e) {
-    }
+    await Promise.all([...refreshChatIds].map(async (cid) => {
+      try {
+        const ccr = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChat?chat_id=${encodeURIComponent(cid)}`);
+        const ccj = await ccr.json();
+        if (ccj && ccj.ok && ccj.result) {
+          _captureChat(ccj.result);
+        } else if (ccj && ccj.ok === false && cid !== String(TG_CHAT_ID)) {
+          // Bot was kicked, chat deleted, or never had access — drop from cache.
+          // Never drop the hardcoded TG_CHAT_ID (could be a transient API error).
+          delete tgChatsMap[cid];
+        }
+      } catch (e) {
+      }
+    }));
   }
-  const checkChatIds = [String(TG_CHAT_ID)];
+  const checkChatIds = [...refreshChatIds].filter((cid) => tgChatsMap[cid]);
   const clientChatsList = stateData && stateData.__bot && stateData.__bot.clientChats || [];
   for (const c of clientChatsList) {
     const id = String(c);
