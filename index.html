@@ -974,6 +974,8 @@
       <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff"></div>
       <button class="player-push-btn hidden" id="playerPushBtn" onclick="pushPlayerNotification()" title="Push current version to Telegram">&#128276; <span id="playerPushLabel">Push</span></button>
       <button class="player-push-btn player-push-client-btn hidden" id="playerPushClientBtn" onclick="pushPlayerToClient()" title="Push current version to a client chat">📤 <span id="playerPushClientLabel">Push to client</span></button>
+      <button class="player-push-btn hidden" id="playerShareBtn" onclick="playerShareDownload()" title="Share a public download link to this preview">🔗 <span id="playerShareLabel">Share link</span></button>
+      <button class="player-push-btn hidden" id="playerDlBtn" onclick="playerDownloadPreview()" title="Download this preview file">⬇ <span id="playerDlLabel">Download</span></button>
     </div>
     <div class="player-with-notes">
       <div class="player-video-col">
@@ -1114,7 +1116,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0163</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0165</div>
 
 <script>
 const USERS = {
@@ -8743,6 +8745,21 @@ function _extractVersionNumber(name){
   return m?('v'+m[1]):'';
 }
 function _updatePlayerPushBtn(){
+  // Share / Download buttons live next to the push buttons but are
+  // independent of push permissions — they care only about whether a
+  // preview file exists. Update them first so the early-return for the
+  // push-chat case still leaves these in a correct state.
+  const _file=_resolvePlayerPreviewFile();
+  const _sBtn=document.getElementById("playerShareBtn");
+  if(_sBtn){
+    if(isAdmin()&&_file)_sBtn.classList.remove('hidden');
+    else _sBtn.classList.add('hidden');
+  }
+  const _dBtn=document.getElementById("playerDlBtn");
+  if(_dBtn){
+    if(_file)_dBtn.classList.remove('hidden');
+    else _dBtn.classList.add('hidden');
+  }
   const btn=document.getElementById("playerPushBtn");
   if(!btn)return;
   const lbl=document.getElementById("playerPushLabel");
@@ -8767,6 +8784,63 @@ function _updatePlayerPushBtn(){
       cBtn.classList.add('hidden');
     }
   }
+}
+// Resolve the preview file currently playing in the gif overlay. Returns
+// null when the version has no preview URL (e.g. a source shot without an
+// uploaded preview AND without the conventional <id>_prev.mp4 file).
+function _resolvePlayerPreviewFile(){
+  if(!_gifCurrentId)return null;
+  if(_gifVersionIdx>=0){
+    const v=(state[_gifCurrentId]?.versions||[])[_gifVersionIdx];
+    if(!v||!v.url)return null;
+    return {name:v.name||(_gifCurrentId+'_'+_gifVersionIdx+'.mp4'),url:v.url,size:v.size||0};
+  }
+  // Source preview — prefer the uploaded file in state.files['source/preview']
+  // and fall back to the legacy projectPath convention used by openGif.
+  const srcArr=state[_gifCurrentId]?.files?.['source/preview']||[];
+  if(srcArr.length&&srcArr[0]?.r2key){
+    const f=srcArr[0];
+    return {name:f.name||(_gifCurrentId+'_prev.mp4'),url:CDN_BASE+'/'+f.r2key,size:f.size||0};
+  }
+  if(typeof hasGif==='function'&&hasGif(_gifCurrentId)){
+    return {name:_gifCurrentId+'_prev.mp4',url:CDN_BASE+'/'+projectPath('video/'+_gifCurrentId+'_prev.mp4'),size:0};
+  }
+  return null;
+}
+function playerDownloadPreview(){
+  const file=_resolvePlayerPreviewFile();
+  if(!file){alert('No preview file to download');return;}
+  _downloadFile(file.url,file.name);
+}
+function playerShareDownload(){
+  if(!isAdmin())return;
+  const file=_resolvePlayerPreviewFile();
+  if(!file){alert('No preview file to share');return;}
+  // Reuse the file-shape share token built by the file-browser flow so the
+  // public download page and Share Links sidebar render consistently.
+  _ensureDownloadShares();
+  const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
+  const versionNumber=_gifVersionIdx<0?'Source':(_extractVersionNumber(versionLabel)||('v'+(_gifVersionIdx+1)));
+  const scopeLabel=_gifCurrentId+' · '+versionNumber+' preview';
+  const token=_genShareToken();
+  state.__downloadShares[token]={
+    files:[{name:file.name,path:file.name,url:file.url,size:file.size||0}],
+    scopeLabel,
+    created:Date.now(),
+    createdBy:currentUser?.id||''
+  };
+  saveState(state);
+  const prodBase=_shareBase();
+  const _pid=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+  const url=prodBase+'?download='+token+'&project='+encodeURIComponent(_pid);
+  // Push-to-Telegram helpers expect a shot id list and would mis-target here;
+  // disable by clearing the stash.
+  window.__lastShareIds=[];
+  window.__lastShareUrl=url;
+  const ov=document.createElement("div");
+  ov.className="confirm-overlay";ov.id="dlShareOverlay";
+  ov.innerHTML=`<div class="confirm-box" style="text-align:left;max-width:580px"><div class="confirm-title" style="color:#3fb950">📥 Download Share Link</div><div class="confirm-msg" style="text-align:left">${esc(scopeLabel)}<br><span style="font-size:11px;color:#8b949e">• ${esc(file.name)}</span><br><br><span style="font-size:11px;color:#484f58">Anyone with this link can download this preview file.</span></div><div class="af-share-row"><code id="dlShareUrl">${esc(url)}</code><button id="dlCopyBtn" onclick="_dlCopyShareLink()">Copy</button></div><div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="confirm-btn cancel" onclick="_dlRevokeShare('${esc(token)}')">Revoke</button><button class="confirm-btn cancel" onclick="document.getElementById('dlShareOverlay').remove()">Close</button></div></div>`;
+  document.body.appendChild(ov);
 }
 async function pushPlayerNotification(){
   if(!_gifCurrentId)return;
