@@ -1114,7 +1114,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0161</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0162</div>
 
 <script>
 const USERS = {
@@ -5077,6 +5077,7 @@ function _renderDoneShotsTracker(){
     // visitors should appear in the sidebar.
     const users=Object.entries(node.users||{}).filter(([k])=>k!=='_anon').map(([,v])=>v);
     const ids=share?.ids||[];
+    const shareFiles=Array.isArray(share?.files)?share.files:null;
     const url=`${_shareBase()}?download=${tok}`;
     const created=share?.created?new Date(share.created).toLocaleDateString():'—';
     html+=`<div class="dst-share" style="margin-bottom:18px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px">`;
@@ -5085,15 +5086,24 @@ function _renderDoneShotsTracker(){
     html+=`<button onclick="navigator.clipboard.writeText('${esc(url)}');this.textContent='✓';setTimeout(()=>this.textContent='🔗',1500)" title="Copy link" style="background:#21262d;border:1px solid #30363d;color:#58a6ff;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer">🔗</button>`;
     html+=`<button onclick="_revokeShareLink('${esc(tok)}')" title="Revoke link (bot can no longer serve it)" style="background:#21262d;border:1px solid #30363d;color:#f85149;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer">🗑</button>`;
     html+=`</div>`;
-    html+=`<div style="font-size:10px;color:#6e7681;margin-bottom:8px;word-break:break-all">${ids.map(i=>esc(i)).join(', ')}</div>`;
+    // Header line: shot ids (legacy) or scope label + file count (file share)
+    const headerLine=shareFiles
+      ?(esc(share.scopeLabel||'Files')+' · '+shareFiles.length+' file'+(shareFiles.length!==1?'s':''))
+      :ids.map(i=>esc(i)).join(', ');
+    html+=`<div style="font-size:10px;color:#6e7681;margin-bottom:8px;word-break:break-all">${headerLine}</div>`;
     // Compute the FULL expected file list for this share so visitor status
     // is measured against the share total (not against what each user has
-    // happened to touch). Filenames match the keys posted by the public
-    // download page: <shotId>_FINAL/<filename>.
+    // happened to touch). For shot shares: <shotId>_FINAL/<filename>. For
+    // file-browser shares: the precomputed .path (which is also what the
+    // public download page posts back to /tg/track).
     const expectedFiles=[];
-    for(const sid of ids){
-      const arr=(state[sid]?.files?.['versions/final'])||[];
-      for(const f of arr)expectedFiles.push(sid+'_FINAL/'+f.name);
+    if(shareFiles){
+      for(const f of shareFiles)if(f?.path)expectedFiles.push(f.path);
+    } else {
+      for(const sid of ids){
+        const arr=(state[sid]?.files?.['versions/final'])||[];
+        for(const f of arr)expectedFiles.push(sid+'_FINAL/'+f.name);
+      }
     }
     if(users.length===0){
       html+=`<div style="font-size:10px;color:#484f58;font-style:italic">No visitors yet</div>`;
@@ -5793,8 +5803,13 @@ async function _revokeShareLink(token){
   const shares=state.__downloadShares||{};
   const info=shares[token];
   const ids=info?.ids||[];
+  const fileShareCount=Array.isArray(info?.files)?info.files.length:0;
   const created=info?.created?new Date(info.created).toLocaleDateString():'—';
-  const body='Date: '+esc(created)+'<br>Shots: '+(ids.length?esc(ids.join(', ')):'—')
+  const summary=fileShareCount
+    ?(esc(info.scopeLabel||'Files')+' · '+fileShareCount+' file'+(fileShareCount!==1?'s':''))
+    :(ids.length?esc(ids.join(', ')):'—');
+  const label=fileShareCount?'Scope: ':'Shots: ';
+  const body='Date: '+esc(created)+'<br>'+label+summary
     +'<br><br>The link will stop working immediately. Anyone who saved or received it from the bot will see <i>Invalid or expired link</i>.';
   const ok=await _showConfirm('Revoke share link?',body);
   if(!ok)return;
@@ -5917,6 +5932,79 @@ function _doneShareSelected(){
   _shareDownloadLink(sel,sel.length+' shots selected:');
 }
 
+// === FILE BROWSER — share download link for arbitrary files/folders ===
+// Builds a {files:[{name,path,url,size}]} payload (vs the {ids:[shotId,...]}
+// payload used by Done Shots) so any selection in the file browser can be
+// shared. Folders are walked recursively via _collectFileUrlsWithPath.
+function _collectShareFilesFromBrowser(id,names){
+  const {items}=_resolveFilesPath(id);
+  const out=[];
+  for(const name of names){
+    const item=items.find(f=>f.name===name);
+    if(!item)continue;
+    if(item.type==='folder'&&item.children){
+      // Recurse, preserving folder name as the path prefix so the ZIP keeps
+      // the structure (e.g. "test/sub/foo.mov").
+      out.push(..._collectFileUrlsWithPath(item.children,name+'/'));
+    } else if(item.url){
+      out.push({name:item.name,path:item.name,url:item.url,size:item._bytes||0});
+    }
+  }
+  // _collectFileUrlsWithPath returns {name,path,url} — make sure size is
+  // carried for the public page total. Look back into the resolved tree.
+  for(const f of out){
+    if(typeof f.size==='number')continue;
+    // Try to find the size in the resolved tree by matching url.
+    let found=null;
+    const walk=(arr)=>{for(const x of arr){if(found)return;if(x.type==='folder'&&x.children)walk(x.children);else if(x.url===f.url){found=x;return;}}};
+    walk(items);
+    f.size=found?(found._bytes||0):0;
+  }
+  return out;
+}
+function _shareFilesFromBrowser(id,names){
+  if(!isAdmin())return;
+  if(!names||!names.length)return;
+  const files=_collectShareFilesFromBrowser(id,names);
+  if(!files.length){_showAlert?.('Nothing to share','Selection has no downloadable files.');return;}
+  // Cap payload — share tokens are CRDT-synced and overly large lists hurt
+  // sync round-trips. Same threshold as the rest of the app's bulk ops.
+  if(files.length>500){_showAlert?.('Too many files','Selection has '+files.length+' files; pick fewer than 500.');return;}
+  const scopeLabel=id==='__admin'?'Admin Files':(id==='__myfiles'?'My Files':(id==='__doneshots'?'Done Shots':id));
+  const breadcrumb=_filesPath.length?(scopeLabel+' / '+_filesPath.join(' / ')):scopeLabel;
+  _ensureDownloadShares();
+  const token=_genShareToken();
+  state.__downloadShares[token]={
+    files:files.map(f=>({name:f.name,path:f.path,url:f.url,size:f.size||0})),
+    scopeLabel:breadcrumb,
+    created:Date.now(),
+    createdBy:currentUser?.id||''
+  };
+  saveState(state);
+  const prodBase=_shareBase();
+  const _pid=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+  const url=prodBase+'?download='+token+'&project='+encodeURIComponent(_pid);
+  const list=names.map(n=>'• '+esc(n)).join('<br>');
+  const title=names.length===1?('Shared from '+breadcrumb+':'):(names.length+' items from '+breadcrumb+':');
+  // _shareDownloadLink push-to-chat handlers expect __lastShareIds to be a
+  // shot id list. File-shape shares have no shot context, so disable push by
+  // clearing the global. Copy/Revoke still work.
+  window.__lastShareIds=[];
+  window.__lastShareUrl=url;
+  const ov=document.createElement("div");
+  ov.className="confirm-overlay";ov.id="dlShareOverlay";
+  ov.innerHTML=`<div class="confirm-box" style="text-align:left;max-width:580px"><div class="confirm-title" style="color:#3fb950">📥 Download Share Link</div><div class="confirm-msg" style="text-align:left">${esc(title)}<br><span style="font-size:11px;color:#8b949e">${list}</span><br><br><span style="font-size:11px;color:#484f58">Anyone with this link can download these files (${files.length} file${files.length!==1?'s':''}).</span></div><div class="af-share-row"><code id="dlShareUrl">${esc(url)}</code><button id="dlCopyBtn" onclick="_dlCopyShareLink()">Copy</button></div><div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="confirm-btn cancel" onclick="_dlRevokeShare('${esc(token)}')">Revoke</button><button class="confirm-btn cancel" onclick="document.getElementById('dlShareOverlay').remove()">Close</button></div></div>`;
+  document.body.appendChild(ov);
+}
+function _browserShareItem(id,name){
+  _shareFilesFromBrowser(id,[name]);
+}
+function _browserShareSelected(id){
+  const names=[..._fileSelection];
+  if(!names.length)return;
+  _shareFilesFromBrowser(id,names);
+}
+
 // === PUBLIC DOWNLOAD PAGE ===
 // var with NO initializer: boot at ~1626 calls _checkPublicDownload which
 // assigns _pubDownloadMode=true. If we wrote `var _pubDownloadMode=false`
@@ -5946,13 +6034,15 @@ async function _initPublicDownload(token){
   await _pullRemote();
   const shares=state.__downloadShares||{};
   const info=shares[token];
-  if(!info||!info.ids||!info.ids.length){_showPubError('Invalid or expired link');return;}
+  const hasIds=Array.isArray(info?.ids)&&info.ids.length;
+  const hasFiles=Array.isArray(info?.files)&&info.files.length;
+  if(!info||(!hasIds&&!hasFiles)){_showPubError('Invalid or expired link');return;}
   // Stash token + Telegram uid (from ?u=) for tracking events
   window.__pubDlToken=token;
   const uParam=new URLSearchParams(location.search).get('u');
   window.__pubDlUid=uParam||'';
   _pubTrack('visited');
-  _renderPublicDownload(info.ids);
+  _renderPublicDownload(info);
 }
 // Public download: log visit / file fetch progress to the worker so the
 // admin tracker UI can show who downloaded what. uid comes from the
@@ -5970,26 +6060,53 @@ function _pubTrack(event,file){
     }).catch(()=>{});
   }catch(e){}
 }
-function _renderPublicDownload(ids){
-  // Build per-shot file list — when a version is approved (starred), only
-  // include finals whose filename matches that version. Mirrors the filter
-  // used in done-shots tracking and _pingArtistFinalRequest payloads.
-  const groups=ids.map(id=>{
-    const finalArr=(state[id]?.files?.['versions/final'])||[];
-    const apprV=state[id]?.approvedVersion||0;
-    const picked=apprV>0?finalArr.filter(f=>_parseVersionName(f.name).vNum===apprV):finalArr;
-    const files=picked.map(f=>({
+function _renderPublicDownload(info){
+  // Two share shapes:
+  //  - Legacy "shot share": info.ids = [shotId,...]. Each shot becomes a
+  //    group; files are pulled live from state[id].files['versions/final']
+  //    (filtered to the approved version, if any).
+  //  - New "file share" (from file browser): info.files = [{name,path,url,size},...].
+  //    All files form a single group labeled by info.scopeLabel; paths are
+  //    used verbatim so folder hierarchy is preserved in the ZIP.
+  // Each group's files carry a precomputed `.path` so download-all / -selected
+  // do not have to know which shape they came from.
+  if(Array.isArray(info))info={ids:info};
+  let groups;
+  let headerLabel;
+  if(Array.isArray(info?.files)&&info.files.length){
+    const files=info.files.map(f=>({
       name:f.name,
       size:f.size||0,
-      url:CDN_BASE+'/'+f.r2key,
-      r2key:f.r2key
+      url:f.url,
+      path:f.path||f.name
     }));
-    return {id,files};
-  });
+    const label=info.scopeLabel||'Shared files';
+    groups=[{id:label,label,kind:'files',files}];
+    headerLabel=label;
+  } else {
+    const ids=info?.ids||[];
+    groups=ids.map(id=>{
+      const finalArr=(state[id]?.files?.['versions/final'])||[];
+      const apprV=state[id]?.approvedVersion||0;
+      const picked=apprV>0?finalArr.filter(f=>_parseVersionName(f.name).vNum===apprV):finalArr;
+      const files=picked.map(f=>({
+        name:f.name,
+        size:f.size||0,
+        url:CDN_BASE+'/'+f.r2key,
+        r2key:f.r2key,
+        path:id+'_FINAL/'+f.name
+      }));
+      return {id,label:id+'_FINAL',kind:'shot',files};
+    });
+    headerLabel=null;
+  }
   let totalFiles=0,totalBytes=0;
   groups.forEach(g=>{g.files.forEach(f=>{totalFiles++;totalBytes+=f.size||0;});});
   let html=`<div class="pub-upload-wrap"><h2>📥 KILLHOUSE VFX — Download</h2>`;
-  html+=`<div style="color:#8b949e;font-size:13px;margin:8px 0 16px">${groups.length} shot${groups.length!==1?'s':''} · ${totalFiles} file${totalFiles!==1?'s':''} · ${_formatSize(totalBytes)}</div>`;
+  const summary=headerLabel
+    ?`${esc(headerLabel)} · ${totalFiles} file${totalFiles!==1?'s':''} · ${_formatSize(totalBytes)}`
+    :`${groups.length} shot${groups.length!==1?'s':''} · ${totalFiles} file${totalFiles!==1?'s':''} · ${_formatSize(totalBytes)}`;
+  html+=`<div style="color:#8b949e;font-size:13px;margin:8px 0 16px">${summary}</div>`;
   if(totalFiles>0){
     html+=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">`;
     html+=`<button class="files-btn" id="pubDlAllBtn" onclick="_pubDownloadAll()" style="background:#238636;color:#fff;border:1px solid #2ea043;padding:10px 18px;font-size:14px;cursor:pointer;border-radius:6px;font-weight:600">⬇ Download All as ZIP (${_formatSize(totalBytes)})</button>`;
@@ -6000,19 +6117,26 @@ function _renderPublicDownload(ids){
   }
   for(let gi=0;gi<groups.length;gi++){
     const g=groups[gi];
-    html+=`<div class="pub-existing" style="margin-top:24px"><h3 data-pub-shot="${esc(g.id)}" style="color:#3fb950;margin-bottom:8px;cursor:default;display:inline-block">📁 ${esc(g.id)}_FINAL</h3>`;
+    // Only shot-shape groups participate in the Done Shots hover preview
+    // (file-shape shares have no shot id to render a thumbnail for).
+    const hoverAttr=g.kind==='shot'?` data-pub-shot="${esc(g.id)}"`:'';
+    html+=`<div class="pub-existing" style="margin-top:24px"><h3${hoverAttr} style="color:#3fb950;margin-bottom:8px;cursor:default;display:inline-block">📁 ${esc(g.label)}</h3>`;
     if(!g.files.length){
       html+=`<div style="color:#484f58;font-size:12px;padding:8px">No files</div>`;
     } else {
       for(let fi=0;fi<g.files.length;fi++){
         const f=g.files[fi];
         const key=gi+'|'+fi;
-        html+=`<div class="pub-existing-item" data-pub-shot="${esc(g.id)}" style="display:flex;align-items:center;gap:14px;padding:10px 8px;border-bottom:1px solid #21262d">
+        // File-shape rows show the full relative path so the user sees the
+        // folder hierarchy; shot-shape rows show just the filename (the
+        // <shotId>_FINAL prefix lives in the group heading).
+        const displayName=g.kind==='files'?f.path:f.name;
+        html+=`<div class="pub-existing-item"${hoverAttr} style="display:flex;align-items:center;gap:14px;padding:10px 8px;border-bottom:1px solid #21262d">
           <input type="checkbox" class="pub-file-cb" data-key="${esc(key)}" onchange="_pubOnSelect(this)" title="Select for batch download">
           <span class="pe-icon">📄</span>
-          <span class="pe-name" style="flex:1;color:#e6edf3">${esc(f.name)}</span>
+          <span class="pe-name" style="flex:1;color:#e6edf3">${esc(displayName)}</span>
           <span class="pe-size" style="color:#8b949e;font-size:12px">${_formatSize(f.size)}</span>
-          <a class="files-btn pub-dl-link" data-track-file="${esc(g.id+'_FINAL/'+f.name)}" href="${esc(f.url)}" download="${esc(f.name)}" target="_blank" style="background:#21262d;border:1px solid #30363d;padding:4px 10px;border-radius:4px;color:#58a6ff;text-decoration:none;font-size:12px">⬇ Download</a>
+          <a class="files-btn pub-dl-link" data-track-file="${esc(f.path)}" href="${esc(f.url)}" download="${esc(f.name)}" target="_blank" style="background:#21262d;border:1px solid #30363d;padding:4px 10px;border-radius:4px;color:#58a6ff;text-decoration:none;font-size:12px">⬇ Download</a>
         </div>`;
       }
     }
@@ -6084,7 +6208,7 @@ async function _pubDownloadSelected(){
   for(const key of sel){
     const[gi,fi]=key.split('|').map(Number);
     const g=groups[gi];const f=g?.files[fi];
-    if(g&&f)files.push({url:f.url,path:g.id+'_FINAL/'+f.name});
+    if(g&&f)files.push({url:f.url,path:f.path||(g.id+'_FINAL/'+f.name)});
   }
   if(!files.length)return;
   files.forEach(f=>_pubTrack('started_file',f.path));
@@ -6103,7 +6227,7 @@ async function _pubDownloadAll(){
   const files=[];
   for(const g of groups){
     for(const f of g.files){
-      files.push({url:f.url,path:g.id+'_FINAL/'+f.name});
+      files.push({url:f.url,path:f.path||(g.id+'_FINAL/'+f.name)});
     }
   }
   if(!files.length)return;
@@ -10226,7 +10350,13 @@ function _updateSelectionUI(id){
   if(bar){
     if(_fileSelection.size>0){
       bar.classList.add("active");
-      const shareSelBtn=(id==='__doneshots')?`<button onclick="_doneShareSelected()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`:'';
+      // Done Shots ROOT shares whole shots (existing shot-level flow). All
+      // other browsers — including Done Shots once you drill into a shot —
+      // share the picked files/folders themselves.
+      const isDoneShotsRoot=(id==='__doneshots'&&_filesPath.length===0);
+      const shareSelBtn=isDoneShotsRoot
+        ?`<button onclick="_doneShareSelected()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`
+        :(isAdmin()?`<button onclick="_browserShareSelected('${id}')" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`:'');
       // Batch ping for red shots: enabled when at least one selected shot
       // is red (status=done, no final). Groups by assigned artist and
       // posts one notice per artist topic.
@@ -10614,13 +10744,20 @@ function _renderShotFiles(id,overrideBody){
       const colorStyle=f.colorTag?` style="color:${f.colorTag}"`:'';
       const dsHoverAttr=(id==='__doneshots'&&_filesPath.length===0)?` data-ds-shot="${esc(f.name)}" data-ds-color="${esc(f.colorTag||'#3fb950')}"`:'';
       const displayLabel=esc(f.displayName||f.name);
+      // Per-row download-share for folders: skip where the row already has a
+      // share button doing the same job (Done Shots root = shot-level share)
+      // or a different job that visually owns the 🔗 icon (Admin Files = upload
+      // share). In those slots the user falls back to the selection bar.
+      const hasOwnShare=(id==='__admin'&&!f.locked)||(id==='__doneshots'&&_filesPath.length===0);
+      const dlShareBtn=(!f.locked&&!hasOwnShare&&f.children&&f.children.length&&isAdmin())
+        ?`<button class="f-dl" onclick="event.stopPropagation();_browserShareItem('${id}','${esc(f.name)}')" title="Share download link">🔗</button>`:'';
       html+=`<tr${dropAttr}${selAttr}${folderTip}${dsHoverAttr}>
         <td class="f-name"${colorStyle} data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${displayLabel}${lock}${shareIcon}</td>
         <td class="f-size">${fileCount||''}</td>
         <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
-        <td class="f-actions">${shareBtn}${_chatFileMode?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}${(id==='__doneshots'&&f.colorTag!=='#3fb950')?'':`<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`}${renBtn}${delBtn}</td>
+        <td class="f-actions">${shareBtn}${dlShareBtn}${(id==='__doneshots'&&f.colorTag!=='#3fb950')?'':`<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`}${renBtn}${delBtn}</td>
       </tr>`;
     } else {
       if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
@@ -10636,13 +10773,15 @@ function _renderShotFiles(id,overrideBody){
       const grip2=f.locked?`<span class="f-grip f-grip-locked">⠿</span>`:`<span class="f-grip${isLocked?' f-grip-locked':''}" draggable="true" data-drag-file="${esc(f.name)}"${isLocked?' data-locked="1"':''}>⠿</span>`;
       const fileTip=_buildFileTip(id,f.name,f.size||'',editCell,f.date||'',_fileIcon(f.name));
       const readmeAttr=(f.name==='README.txt'&&f.url)?` data-readme-url="${esc(f.url)}" style="cursor:pointer"`:'';
+      const fileShareBtn=(f.url&&!isReadme&&isAdmin())
+        ?`<button class="f-dl" onclick="event.stopPropagation();_browserShareItem('${id}','${esc(f.name)}')" title="Share download link">🔗</button>`:'';
       html+=`<tr${selAttr2}${fileTip}${readmeAttr}>
         <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
         <td class="f-size"></td>
         <td class="f-size">${f.size||''}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date">${f.date||''}</td>
-        <td class="f-actions">${_chatFileMode?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}${dlBtn}${fileRenBtn}${fileDelBtn}</td>
+        <td class="f-actions">${fileShareBtn}${dlBtn}${fileRenBtn}${fileDelBtn}</td>
       </tr>`;
     }
   }
