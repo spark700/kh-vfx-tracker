@@ -974,7 +974,7 @@
       <div id="playerShotLabel" style="font-size:20px;font-weight:700;color:#58a6ff"></div>
       <button class="player-push-btn hidden" id="playerPushBtn" onclick="pushPlayerNotification()" title="Push current version to Telegram">&#128276; <span id="playerPushLabel">Push</span></button>
       <button class="player-push-btn player-push-client-btn hidden" id="playerPushClientBtn" onclick="pushPlayerToClient()" title="Push current version to a client chat">📤 <span id="playerPushClientLabel">Push to client</span></button>
-      <button class="player-push-btn hidden" id="playerShareBtn" onclick="playerShareDownload()" title="Share a public download link to this preview">🔗 <span id="playerShareLabel">Share link</span></button>
+      <button class="player-push-btn hidden" id="playerShareBtn" onclick="playerShareDownload()" title="Share a public download link to this preview">🔗 <span id="playerShareLabel">Share download link</span></button>
       <button class="player-push-btn hidden" id="playerDlBtn" onclick="playerDownloadPreview()" title="Download this preview file">⬇ <span id="playerDlLabel">Download</span></button>
     </div>
     <div class="player-with-notes">
@@ -1116,7 +1116,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0165</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0166</div>
 
 <script>
 const USERS = {
@@ -10429,8 +10429,8 @@ function _updateSelectionUI(id){
       // share the picked files/folders themselves.
       const isDoneShotsRoot=(id==='__doneshots'&&_filesPath.length===0);
       const shareSelBtn=isDoneShotsRoot
-        ?`<button onclick="_doneShareSelected()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`
-        :(isAdmin()?`<button onclick="_browserShareSelected('${id}')" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`:'');
+        ?`<button onclick="_doneShareSelected()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share download link</button>`
+        :(isAdmin()?`<button onclick="_browserShareSelected('${id}')" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share download link</button>`:'');
       // Batch ping for red shots: enabled when at least one selected shot
       // is red (status=done, no final). Groups by assigned artist and
       // posts one notice per artist topic.
